@@ -6,7 +6,7 @@ setup(
     python_requires=">=3.8",
     entry_points={
         'console_scripts': [
-            'main = packages.ycsb.cli:main',
+            'tpcc = packages.tpcc.cli:main',
         ]
     }
 )

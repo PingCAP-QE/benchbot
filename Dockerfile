@@ -1,8 +1,7 @@
-FROM python:3.8-alpine
-RUN apk update
-RUN echo "http://dl-8.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
-RUN apk --no-cache --update-cache add gcc gfortran build-base wget freetype-dev libpng-dev openblas-dev
-RUN ln -s /usr/include/locale.h /usr/include/xlocale.h
+FROM python:3.8-buster
+RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.19.0/bin/linux/amd64/kubectl
+RUN chmod +x ./kubectl
+RUN mv ./kubectl /usr/local/bin/kubectl
 
 ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
@@ -16,6 +15,6 @@ RUN pip install -r requirements.txt
 COPY . .
 RUN pip install -e .
 
-COPY --from=mahjonp/go-ycsb /go-ycsb /bin/go-ycsb
+#COPY --from=mahjonp/go-ycsb /go-ycsb /bin/go-ycsb
 
 CMD ["tail", "-f", "/dev/null"]
