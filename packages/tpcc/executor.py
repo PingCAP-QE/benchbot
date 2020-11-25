@@ -1,5 +1,7 @@
 import json
 import logging
+import random
+import string
 
 from packages.util import kubectl, naglfar
 from packages.util import stat
@@ -13,6 +15,12 @@ class TPCCBenchmark:
         self.args = dict()
         for key, value in vars(args).items():
             self.args[key] = value
+        # generate ns
+        letters = string.ascii_lowercase
+        digits = string.digits
+        self.ns = "naglfar-benchbot-tpcc-{letters}-{digits}".format(
+            letters=''.join(random.choice(letters) for _ in range(5)),
+            digits=''.join(random.choice(digits) for _ in range(9)))
 
     def get_tidb_version(self):
         return self.args["tidb"]
@@ -34,41 +42,41 @@ class TPCCBenchmark:
 
     def run(self):
         try:
-            kubectl.create_ns(TPCCBenchmark.ns())
-            _ = kubectl.apply(TPCCBenchmark.gen_test_resource_request())
-            naglfar.wait_request_ready(TPCCBenchmark.ns(), TPCCBenchmark.request_name())
+            kubectl.create_ns(self.ns)
+            _ = kubectl.apply(self.gen_test_resource_request())
+            naglfar.wait_request_ready(self.ns, TPCCBenchmark.request_name())
             self.run_with_baseline()
         finally:
-            kubectl.delete_ns(TPCCBenchmark.ns())
+            kubectl.delete_ns(self.ns)
 
     def run_with_baseline(self):
-        pr_results = TPCCBenchmark.run_naglfar(version="nightly",
-                                               tidb_url=self.get_tidb_version(),
-                                               tikv_url=self.get_tikv_version(),
-                                               pd_url=self.get_pd_version())
+        pr_results = self.run_naglfar(version="nightly",
+                                      tidb_url=self.get_tidb_version(),
+                                      tikv_url=self.get_tikv_version(),
+                                      pd_url=self.get_pd_version())
 
-        base_results = TPCCBenchmark.run_naglfar(version="nightly",
-                                                 tidb_url=self.get_baseline_tidb_version(),
-                                                 tikv_url=self.get_baseline_tikv_version(),
-                                                 pd_url=self.get_baseline_pd_version())
+        base_results = self.run_naglfar(version="nightly",
+                                        tidb_url=self.get_baseline_tidb_version(),
+                                        tikv_url=self.get_baseline_tikv_version(),
+                                        pd_url=self.get_baseline_pd_version())
 
         TPCCBenchmark.generate_report(base_results, pr_results)
 
-    @staticmethod
-    def run_naglfar(version: str,
+    def run_naglfar(self,
+                    version: str,
                     tidb_url: str = None,
                     pd_url: str = None,
                     tikv_url: str = None):
-        tct_file = kubectl.apply(TPCCBenchmark.gen_test_cluster_topology(version=version,
-                                                                         tidb_download_url=tidb_url,
-                                                                         tikv_download_url=tikv_url,
-                                                                         pd_download_url=pd_url))
-        naglfar.wait_tct_ready(TPCCBenchmark.ns(), TPCCBenchmark.tct_name())
-        tw_file = kubectl.apply(TPCCBenchmark.gen_test_workload())
-        host_ip, port = naglfar.get_mysql_endpoint(ns=TPCCBenchmark.ns(), tidb_node=TPCCBenchmark.tidb_node())
+        tct_file = kubectl.apply(self.gen_test_cluster_topology(version=version,
+                                                                tidb_download_url=tidb_url,
+                                                                tikv_download_url=tikv_url,
+                                                                pd_download_url=pd_url))
+        naglfar.wait_tct_ready(self.ns, TPCCBenchmark.tct_name())
+        tw_file = kubectl.apply(self.gen_test_workload())
+        host_ip, port = naglfar.get_mysql_endpoint(ns=self.ns, tidb_node=TPCCBenchmark.tidb_node())
         version = cluster_version(tidb_host=host_ip, tidb_port=port)
-        naglfar.wait_tw_finish(TPCCBenchmark.ns(), TPCCBenchmark.tw_name())
-        result = naglfar.get_tw_result(TPCCBenchmark.ns(), TPCCBenchmark.tw_name(), TPCCBenchmark.tw_name())
+        naglfar.wait_tw_finish(self.ns, TPCCBenchmark.tw_name())
+        result = naglfar.get_tw_result(self.ns, TPCCBenchmark.tw_name(), TPCCBenchmark.tw_name())
         kubectl.delete(tw_file)
         kubectl.delete(tct_file)
         return {
@@ -96,21 +104,16 @@ class TPCCBenchmark:
         return "tpcc200"
 
     @staticmethod
-    def ns():
-        return "naglfar-benchbot-tpcc"
-
-    @staticmethod
     def tidb_node():
         return "n1"
 
-    @staticmethod
-    def gen_test_resource_request() -> str:
+    def gen_test_resource_request(self) -> str:
         return f"""
 apiVersion: naglfar.pingcap.com/v1
 kind: TestResourceRequest
 metadata:
   name: {TPCCBenchmark.request_name()}
-  namespace: {TPCCBenchmark.ns()}
+  namespace: {self.ns}
 spec:
   items:
     - name: {TPCCBenchmark.tidb_node()}
@@ -137,8 +140,7 @@ spec:
         cores: 10
 """
 
-    @staticmethod
-    def gen_test_cluster_topology(version: str,
+    def gen_test_cluster_topology(self, version: str,
                                   tikv_download_url=None,
                                   tidb_download_url=None,
                                   pd_download_url=None) -> str:
@@ -147,7 +149,7 @@ apiVersion: naglfar.pingcap.com/v1
 kind: TestClusterTopology
 metadata:
   name: {TPCCBenchmark.tct_name()}
-  namespace: {TPCCBenchmark.ns()}
+  namespace: {self.ns}
 spec:
   resourceRequest: tidb-cluster
   tidbCluster:
@@ -185,14 +187,13 @@ spec:
         deployDir: /disk1/deploy/grafana-3000
 """
 
-    @staticmethod
-    def gen_test_workload() -> str:
+    def gen_test_workload(self) -> str:
         return f"""
 apiVersion: naglfar.pingcap.com/v1
 kind: TestWorkload
 metadata:
   name: {TPCCBenchmark.tw_name()}
-  namespace: {TPCCBenchmark.ns()}
+  namespace: {self.ns}
 spec:
   clusterTopologies:
     - name: {TPCCBenchmark.tct_name()}
