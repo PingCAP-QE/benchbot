@@ -92,8 +92,8 @@ class TPCCBenchmark:
     @staticmethod
     def process_bench_result(data) -> float:
         for item in data:
-            if item["Type"] == "NEW_ORDER" and item["name"] == "tpm":
-                return float(item["Value"])
+            if item["type"] == "NEW_ORDER" and item["name"] == "tpm":
+                return float(item["value"])
         raise RuntimeError("NEW_ORDER not found")
 
     @staticmethod
