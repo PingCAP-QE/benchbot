@@ -72,11 +72,16 @@ class TPCCBenchmark:
                                                                 tikv_download_url=tikv_url,
                                                                 pd_download_url=pd_url))
         naglfar.wait_tct_ready(self.ns, TPCCBenchmark.tct_name())
-        tw_file = kubectl.apply(self.gen_test_workload())
         host_ip, port = naglfar.get_mysql_endpoint(ns=self.ns, tidb_node=TPCCBenchmark.tidb_node())
         version = cluster_version(tidb_host=host_ip, tidb_port=port)
-        naglfar.wait_tw_finish(self.ns, TPCCBenchmark.tw_name())
-        result = naglfar.get_tw_result(self.ns, TPCCBenchmark.tw_name(), TPCCBenchmark.tw_name())
+
+        tw_file = kubectl.apply(self.gen_test_workload())
+        naglfar.wait_tw_status(self.ns, TPCCBenchmark.tw_name(), lambda status: status != "'pending'")
+
+        std_log = naglfar.tail_tw_logs(self.ns, TPCCBenchmark.tw_name())
+        result = json.loads(std_log.strip().split('\n')[-1])
+
+        naglfar.wait_tw_status(self.ns, TPCCBenchmark.tw_name(), lambda status: status == "'finish'")
         kubectl.delete(tw_file)
         kubectl.delete(tct_file)
         return {
@@ -87,7 +92,7 @@ class TPCCBenchmark:
     @staticmethod
     def process_bench_result(data) -> float:
         for item in data:
-            if item["Type"] == "Summary-NEW_ORDER":
+            if item["Type"] == "NEW_ORDER" and item["name"] == "tpm":
                 return float(item["Value"])
         raise RuntimeError("NEW_ORDER not found")
 
@@ -215,7 +220,7 @@ spec:
             tidb=`echo $cluster_tidb0 | awk -F ":" '{{print $1}}'`
             bench-toolset bench tpcc \
              --host $tidb --port 4000 \
-             --warehouse 200 \
+             --warehouses 200 \
              --time 2m \
              --log "/var/log/test.log" \
              --br-args "db" \
@@ -223,7 +228,8 @@ spec:
              --br-args "--pd=$cluster_pd0" \
              --br-args "--storage=s3://mybucket/tpcc-200" \
              --br-args "--s3.endpoint=http://172.16.4.4:30812" \
-             --br-args "--send-credentials-to-tikv=true"
+             --br-args "--send-credentials-to-tikv=true" \
+             --json
 """
 
     @staticmethod

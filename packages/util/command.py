@@ -5,9 +5,11 @@ import typing
 
 def run_command(command: typing.List[str],
                 cwd: typing.Optional[str] = None,
-                merge_stderr: typing.Optional[bool] = False):
+                merge_stderr: typing.Optional[bool] = False,
+                print_log_to_stderr: typing.Optional[bool] = False):
     """
     run_command runs a command
+    :param print_log_to_stderr:
     :param command: list format command
     :param cwd: cwd
     :param merge_stderr: merge stderr into output
@@ -25,5 +27,7 @@ def run_command(command: typing.List[str],
             break
         if out:
             result += out
+            if print_log_to_stderr:
+                print(out, end='', file=sys.stderr)
     rc = process.poll()
     return result, rc

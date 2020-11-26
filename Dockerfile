@@ -16,5 +16,6 @@ COPY . .
 RUN pip install -e .
 
 #COPY --from=mahjonp/go-ycsb /go-ycsb /bin/go-ycsb
+COPY bin/naglfar /bin/naglfar
 
 CMD ["tail", "-f", "/dev/null"]
