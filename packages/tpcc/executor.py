@@ -221,7 +221,7 @@ spec:
             bench-toolset bench tpcc \
              --host $tidb --port 4000 \
              --warehouses 200 \
-             --time 2m \
+             --time 30m \
              --threads 200 \
              --log "/var/log/test.log" \
              --br-args "db" \

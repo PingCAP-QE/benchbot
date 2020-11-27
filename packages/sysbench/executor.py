@@ -235,7 +235,7 @@ spec:
              --tables 32 \
              --table-size 10000000 \
              --name {self.get_name()} \
-             --time 1m \
+             --time 30m \
              --threads 200 \
              --log "/var/log/test.log" \
              --br-args "db" \
