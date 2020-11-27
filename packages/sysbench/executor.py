@@ -2,15 +2,15 @@ import json
 import logging
 import random
 import string
+import typing
 
 from packages.util import kubectl, naglfar
-from packages.util import stat
 from packages.util.version import cluster_version
 
 logger = logging.getLogger(__name__)
 
 
-class TPCCBenchmark:
+class SysbenchBenchmark:
     def __init__(self, args):
         self.args = dict()
         for key, value in vars(args).items():
@@ -18,9 +18,12 @@ class TPCCBenchmark:
         # generate ns
         letters = string.ascii_lowercase
         digits = string.digits
-        self.ns = "naglfar-benchbot-tpcc-{letters}-{digits}".format(
+        self.ns = "naglfar-benchbot-sysbench-{letters}-{digits}".format(
             letters=''.join(random.choice(letters) for _ in range(5)),
             digits=''.join(random.choice(digits) for _ in range(9)))
+
+    def get_version(self):
+        return self.args["version"]
 
     def get_tidb_version(self):
         return self.args["tidb"]
@@ -31,6 +34,9 @@ class TPCCBenchmark:
     def get_pd_version(self):
         return self.args["pd"]
 
+    def get_baseline_version(self):
+        return self.args["baseline_version"]
+
     def get_baseline_tidb_version(self):
         return self.args["baseline_tidb"]
 
@@ -40,27 +46,30 @@ class TPCCBenchmark:
     def get_baseline_pd_version(self):
         return self.args["baseline_pd"]
 
+    def get_name(self):
+        return self.args["name"]
+
     def run(self):
         try:
             kubectl.create_ns(self.ns)
             _ = kubectl.apply(self.gen_test_resource_request())
-            naglfar.wait_request_ready(self.ns, TPCCBenchmark.request_name())
+            naglfar.wait_request_ready(self.ns, SysbenchBenchmark.request_name())
             self.run_with_baseline()
         finally:
             kubectl.delete_ns(self.ns)
 
     def run_with_baseline(self):
-        pr_results = self.run_naglfar(version="nightly",
+        pr_results = self.run_naglfar(version=self.get_version(),
                                       tidb_url=self.get_tidb_version(),
                                       tikv_url=self.get_tikv_version(),
                                       pd_url=self.get_pd_version())
 
-        base_results = self.run_naglfar(version="nightly",
+        base_results = self.run_naglfar(version=self.get_baseline_version(),
                                         tidb_url=self.get_baseline_tidb_version(),
                                         tikv_url=self.get_baseline_tikv_version(),
                                         pd_url=self.get_baseline_pd_version())
 
-        TPCCBenchmark.generate_report(base_results, pr_results)
+        SysbenchBenchmark.generate_report(base_results, pr_results)
 
     def run_naglfar(self,
                     version: str,
@@ -71,30 +80,37 @@ class TPCCBenchmark:
                                                                 tidb_download_url=tidb_url,
                                                                 tikv_download_url=tikv_url,
                                                                 pd_download_url=pd_url))
-        naglfar.wait_tct_ready(self.ns, TPCCBenchmark.tct_name())
-        host_ip, port = naglfar.get_mysql_endpoint(ns=self.ns, tidb_node=TPCCBenchmark.tidb_node())
+        naglfar.wait_tct_ready(self.ns, SysbenchBenchmark.tct_name())
+        host_ip, port = naglfar.get_mysql_endpoint(ns=self.ns, tidb_node=SysbenchBenchmark.tidb_node())
         version = cluster_version(tidb_host=host_ip, tidb_port=port)
 
-        tw_file = kubectl.apply(self.gen_test_workload())
-        naglfar.wait_tw_status(self.ns, TPCCBenchmark.tw_name(), lambda status: status != "'pending'")
+        tw_file = kubectl.apply(self.gen_test_workload(version=version))
+        naglfar.wait_tw_status(self.ns, SysbenchBenchmark.tw_name(), lambda status: status != "'pending'")
 
-        std_log = naglfar.tail_tw_logs(self.ns, TPCCBenchmark.tw_name())
+        std_log = naglfar.tail_tw_logs(self.ns, SysbenchBenchmark.tw_name())
         result = json.loads(std_log.strip().split('\n')[-1])
 
-        naglfar.wait_tw_status(self.ns, TPCCBenchmark.tw_name(), lambda status: status == "'finish'")
+        naglfar.wait_tw_status(self.ns, SysbenchBenchmark.tw_name(), lambda status: status == "'finish'")
         kubectl.delete(tw_file)
         kubectl.delete(tct_file)
         return {
             "cluster_info": version,
-            "bench_result": TPCCBenchmark.process_bench_result(result)
+            "bench_result": SysbenchBenchmark.process_bench_result(result)
         }
 
     @staticmethod
-    def process_bench_result(data) -> float:
+    def process_bench_result(data) -> typing.Mapping[str, float]:
+        result = dict()
         for item in data:
-            if item["type"] == "NEW_ORDER" and item["name"] == "tpm":
-                return float(item["value"])
-        raise RuntimeError("NEW_ORDER not found")
+            if item["type"] == "summary" and item["name"] == "tps":
+                result["tps"] = float(item["value"])
+            elif item["type"] == "summary" and item["name"] == "qps":
+                result["qps"] = float(item["value"])
+            elif item["type"] == "summary" and item["name"] == "avgLat":
+                result["avgLat"] = float(item["value"])
+            elif item["type"] == "summary" and item["name"] == "p99Lat":
+                result["p99Lat"] = float(item["value"])
+        return result
 
     @staticmethod
     def request_name():
@@ -106,7 +122,7 @@ class TPCCBenchmark:
 
     @staticmethod
     def tw_name():
-        return "tpcc200"
+        return "sysbench-32-10000000"
 
     @staticmethod
     def tidb_node():
@@ -117,32 +133,24 @@ class TPCCBenchmark:
 apiVersion: naglfar.pingcap.com/v1
 kind: TestResourceRequest
 metadata:
-  name: {TPCCBenchmark.request_name()}
+  name: {SysbenchBenchmark.request_name()}
   namespace: {self.ns}
 spec:
   items:
-    - name: {TPCCBenchmark.tidb_node()}
+    - name: {SysbenchBenchmark.tidb_node()}
       spec:
-        memory: 10GB
-        cores: 10
-#        disks:
-#          disk1:
-#            kind: nvme
-#            size: 500GB
-#            mountPath: /disks1
-    - name: n2
-      spec:
-        memory: 10GB
-        cores: 10
+        memory: 130GB
+        cores: 30
         disks:
-#          disk1:
-#            kind: nvme
-#            size: 1TB
-#            mountPath: /disks1
+          disk1:
+            kind: nvme
+            mountPath: /disk1
+        testMachineResource: 172.16.5.69
     - name: workload
       spec:
-        memory: 10GB
-        cores: 10
+        memory: 20GB
+        cores: 8
+        testMachineResource: 172.16.5.69
 """
 
     def gen_test_cluster_topology(self, version: str,
@@ -153,7 +161,7 @@ spec:
 apiVersion: naglfar.pingcap.com/v1
 kind: TestClusterTopology
 metadata:
-  name: {TPCCBenchmark.tct_name()}
+  name: {SysbenchBenchmark.tct_name()}
   namespace: {self.ns}
 spec:
   resourceRequest: tidb-cluster
@@ -169,7 +177,7 @@ spec:
       pdDownloadURL: {pd_download_url or '""'}
     control: n1
     tikv:
-      - host: n2
+      - host: n1
         port: 20160
         statusPort: 20180
         deployDir: /disk1/deploy/tikv-20160
@@ -192,22 +200,26 @@ spec:
         deployDir: /disk1/deploy/grafana-3000
 """
 
-    def gen_test_workload(self) -> str:
+    def gen_test_workload(self, version: str) -> str:
+        path = "sysbench-32-10000000"
+        if version.startswith("v4.0."):
+            path = "sysbench-32-10000000-release4.0"
+
         return f"""
 apiVersion: naglfar.pingcap.com/v1
 kind: TestWorkload
 metadata:
-  name: {TPCCBenchmark.tw_name()}
+  name: {SysbenchBenchmark.tw_name()}
   namespace: {self.ns}
 spec:
   clusterTopologies:
-    - name: {TPCCBenchmark.tct_name()}
+    - name: {SysbenchBenchmark.tct_name()}
       aliasName: cluster
   workloads:
-    - name: {TPCCBenchmark.tw_name()}
+    - name: {SysbenchBenchmark.tw_name()}
       dockerContainer:
         resourceRequest:
-          name: {TPCCBenchmark.request_name()}
+          name: {SysbenchBenchmark.request_name()}
           node: workload
         image: "hub.pingcap.net/mahjonp/bench-toolset"
         imagePullPolicy: Always
@@ -218,16 +230,18 @@ spec:
             set -ex
             export AWS_ACCESS_KEY_ID=YOURACCESSKEY AWS_SECRET_ACCESS_KEY=YOURSECRETKEY
             tidb=`echo $cluster_tidb0 | awk -F ":" '{{print $1}}'`
-            bench-toolset bench tpcc \
+            bench-toolset bench sysbench \
              --host $tidb --port 4000 \
-             --warehouses 200 \
-             --time 2m \
+             --tables 32 \
+             --table-size 10000000 \
+             --name {self.get_name()} \
+             --time 1m \
              --threads 200 \
              --log "/var/log/test.log" \
              --br-args "db" \
              --br-args "--db=test" \
              --br-args "--pd=$cluster_pd0" \
-             --br-args "--storage=s3://mybucket/tpcc-200" \
+             --br-args "--storage=s3://mybucket/{path}" \
              --br-args "--s3.endpoint=http://172.16.4.4:30812" \
              --br-args "--send-credentials-to-tikv=true" \
              --json
@@ -250,7 +264,7 @@ spec:
 
         print("""## Benchmark Report
 
-> Run TPC-C Performance Test on Naglfar
+> Run Sysbench Performance Test on Naglfar
 
 ```diff
 @@                               Benchmark Diff                               @@
@@ -275,11 +289,15 @@ spec:
         print("""================================================================================""")
 
         # print bench result and the comparison with previous data
-        current_tpmc = current_bench_result["bench_result"]
-        previous_tpmc = baseline_bench_result["bench_result"]
-        tpmc_delta = stat.delta(current_tpmc, previous_tpmc)
+        current = current_bench_result["bench_result"]
+        previous = baseline_bench_result["bench_result"]
 
-        print("""Measured tpmC (NewOrders): %.2f, delta: %.2f%%"""
-              % (current_tpmc, tpmc_delta))
+        print("""baseline: tps: %2.f, qps: %.2f, avgLat: %.2f, p99Lat: %.2f""" % (
+            previous["tps"], previous["qps"], previous["avgLat"], previous["p99Lat"]
+        ))
+
+        print("""current version: tps: %2.f, qps: %.2f, avgLat: %.2f, p99Lat: %.2f""" % (
+            current["tps"], current["qps"], current["avgLat"], current["p99Lat"]
+        ))
 
         print("```")
