@@ -84,7 +84,7 @@ class SysbenchBenchmark:
         host_ip, port = naglfar.get_mysql_endpoint(ns=self.ns, tidb_node=SysbenchBenchmark.tidb_node())
         version = cluster_version(tidb_host=host_ip, tidb_port=port)
 
-        tw_file = kubectl.apply(self.gen_test_workload(version=version))
+        tw_file = kubectl.apply(self.gen_test_workload(version=self.get_version()))
         naglfar.wait_tw_status(self.ns, SysbenchBenchmark.tw_name(), lambda status: status != "'pending'")
 
         std_log = naglfar.tail_tw_logs(self.ns, SysbenchBenchmark.tw_name())
