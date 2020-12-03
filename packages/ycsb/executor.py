@@ -219,7 +219,7 @@ spec:
             pd=`echo $cluster_pd0 | awk -F ":" '{{print $1}}'`
 
             echo "recordcount=100000000" >> global.conf
-            echo "operationcount=1000000" >> global.conf
+            echo "operationcount=10000000" >> global.conf
             echo "workload=core" >> global.conf
             echo "fieldcount=10" >> global.conf
             echo "fieldlength=100" >> global.conf
