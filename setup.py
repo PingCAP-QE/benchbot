@@ -8,6 +8,7 @@ setup(
         'console_scripts': [
             'tpcc = packages.tpcc.cli:main',
             'sysbench = packages.sysbench.cli:main',
+            'ycsb = packages.ycsb.cli:main',
         ]
     }
 )
