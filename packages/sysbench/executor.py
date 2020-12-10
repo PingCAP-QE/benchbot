@@ -136,6 +136,9 @@ metadata:
   name: {SysbenchBenchmark.request_name()}
   namespace: {self.ns}
 spec:
+  machines:
+    - name: m1
+      exclusive: true
   items:
     - name: {SysbenchBenchmark.tidb_node()}
       spec:
@@ -145,12 +148,12 @@ spec:
           disk1:
             kind: nvme
             mountPath: /disk1
-        testMachineResource: 172.16.5.69
+        machine: m1
     - name: workload
       spec:
         memory: 20GB
         cores: 8
-        testMachineResource: 172.16.5.69
+        machine: m1
 """
 
     def gen_test_cluster_topology(self, version: str,
