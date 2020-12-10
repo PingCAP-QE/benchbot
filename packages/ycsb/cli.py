@@ -16,7 +16,7 @@ def main():
     arguments.add_argument("-tikv", type=str, help="the tikv download URL")
     arguments.add_argument("-pd", type=str, help="the pd download URL")
 
-    arguments.add_argument("-baseline-version", required=True, type=str,
+    arguments.add_argument("-baseline-version", required=False, type=str,
                            help="set baseline version, eg: nightly,v4.0.8")
     arguments.add_argument("-baseline-tidb", type=str, help="set the baseline tidb download URL")
     arguments.add_argument("-baseline-tikv", type=str, help="the the baseline tikv download URL")

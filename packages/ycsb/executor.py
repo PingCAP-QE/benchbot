@@ -63,12 +63,13 @@ class YCSBBenchmark:
                                       tikv_url=self.get_tikv_version(),
                                       pd_url=self.get_pd_version())
 
-        base_results = self.run_naglfar(version=self.get_baseline_version(),
-                                        tidb_url=self.get_baseline_tidb_version(),
-                                        tikv_url=self.get_baseline_tikv_version(),
-                                        pd_url=self.get_baseline_pd_version())
+        if self.get_baseline_version():
+            base_results = self.run_naglfar(version=self.get_baseline_version(),
+                                            tidb_url=self.get_baseline_tidb_version(),
+                                            tikv_url=self.get_baseline_tikv_version(),
+                                            pd_url=self.get_baseline_pd_version())
 
-        YCSBBenchmark.generate_report(base_results, pr_results)
+            YCSBBenchmark.generate_report(base_results, pr_results)
 
     def run_naglfar(self,
                     version: str,
@@ -122,6 +123,9 @@ metadata:
   name: {YCSBBenchmark.request_name()}
   namespace: {self.ns}
 spec:
+  machines:
+    - name: m1
+      exclusive: true
   items:
     - name: {YCSBBenchmark.tidb_node()}
       spec:
@@ -131,12 +135,12 @@ spec:
           disk1:
             kind: nvme
             mountPath: /disk1
-        testMachineResource: 172.16.5.69
+        machine: m1
     - name: workload
       spec:
         memory: 20GB
         cores: 8
-        testMachineResource: 172.16.5.69
+        machine: m1
 """
 
     def gen_test_cluster_topology(self, version: str,
@@ -207,7 +211,7 @@ spec:
         resourceRequest:
           name: {YCSBBenchmark.request_name()}
           node: workload
-        image: "hub.pingcap.net/mahjonp/bench-toolset"
+        image: "hub.pingcap.net/mahjonp/bench-toolset:test"
         imagePullPolicy: Always
         command:
           - /bin/sh
@@ -224,9 +228,10 @@ spec:
             echo "fieldcount=10" >> global.conf
             echo "fieldlength=100" >> global.conf
             echo "threadcount=500" >> global.conf
+            echo "requestdistribution=zipfian" >> global.conf
 
             br restore db --db=test --pd $pd:2379 --storage s3://mybucket/ycsb-100m-release4.0 \\
-                --s3.endpoint http://172.16.4.4:30812 --send-credentials-to-tikv=true
+                --s3.endpoint http://172.16.4.4:30812 --send-credentials-to-tikv=true --log-level=debug
             
             go-ycsb run mysql \\
                 -P /ycsb/workloads/{self.get_name()} \\

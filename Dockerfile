@@ -8,16 +8,13 @@ RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 WORKDIR /src
+RUN curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/PingCAP-QE/Naglfar/master/scripts/kubectl-naglfar-installer.sh | sh
+ENV PATH="/root/.Naglfar/bin:$PATH"
 
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY . .
 RUN pip install -e .
-
-#COPY --from=mahjonp/go-ycsb /go-ycsb /bin/go-ycsb
-
-RUN curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/PingCAP-QE/Naglfar/master/scripts/kubectl-naglfar-installer.sh | sh
-ENV PATH="/root/.Naglfar/bin:$PATH"
 
 CMD ["tail", "-f", "/dev/null"]

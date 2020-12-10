@@ -120,29 +120,24 @@ metadata:
   name: {TPCCBenchmark.request_name()}
   namespace: {self.ns}
 spec:
+  machines:
+    - name: m1
+      exclusive: true
   items:
     - name: {TPCCBenchmark.tidb_node()}
       spec:
-        memory: 10GB
-        cores: 10
-#        disks:
-#          disk1:
-#            kind: nvme
-#            size: 500GB
-#            mountPath: /disks1
-    - name: n2
-      spec:
-        memory: 10GB
-        cores: 10
+        memory: 130GB
+        cores: 30
         disks:
-#          disk1:
-#            kind: nvme
-#            size: 1TB
-#            mountPath: /disks1
+          disk1:
+            kind: nvme
+            mountPath: /disk1
+        machine: m1
     - name: workload
       spec:
-        memory: 10GB
-        cores: 10
+        memory: 20GB
+        cores: 8
+        machine: m1
 """
 
     def gen_test_cluster_topology(self, version: str,
@@ -169,7 +164,7 @@ spec:
       pdDownloadURL: {pd_download_url or '""'}
     control: n1
     tikv:
-      - host: n2
+      - host: n1
         port: 20160
         statusPort: 20180
         deployDir: /disk1/deploy/tikv-20160
