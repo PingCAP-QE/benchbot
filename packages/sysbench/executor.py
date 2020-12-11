@@ -205,8 +205,10 @@ spec:
 
     def gen_test_workload(self, version: str) -> str:
         path = "sysbench-32-10000000"
+        tag = "latest"
         if version.startswith("v4.0."):
             path = "sysbench-32-10000000-release4.0"
+            tag = "tidb-4.0"
 
         return f"""
 apiVersion: naglfar.pingcap.com/v1
@@ -224,7 +226,7 @@ spec:
         resourceRequest:
           name: {SysbenchBenchmark.request_name()}
           node: workload
-        image: "hub.pingcap.net/mahjonp/bench-toolset"
+        image: "hub.pingcap.net/mahjonp/bench-toolset:{tag}"
         imagePullPolicy: Always
         command:
           - /bin/sh

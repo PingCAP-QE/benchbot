@@ -191,10 +191,16 @@ spec:
 """
 
     def gen_test_workload(self, version: str) -> str:
-        # path = "ycsb-100m"
-        # if version.startswith("v4.0."):
-        #     path = "ycsb-100m-release4.0"
-        #
+        """
+        @mahjonp fix me: replace test tag with `tag`
+        :param version:
+        :return:
+        """
+        path = "ycsb-100m"
+        tag = "latest"
+        if version.startswith("v4.0."):
+            path = "ycsb-100m-release4.0"
+            tag = "tidb-4.0"
         return f"""
 apiVersion: naglfar.pingcap.com/v1
 kind: TestWorkload
@@ -230,8 +236,8 @@ spec:
             echo "threadcount=500" >> global.conf
             echo "requestdistribution=zipfian" >> global.conf
 
-            br restore db --db=test --pd $pd:2379 --storage s3://mybucket/ycsb-100m-release4.0 \\
-                --s3.endpoint http://172.16.4.4:30812 --send-credentials-to-tikv=true --log-level=debug
+            br restore db --db=test --pd $pd:2379 --storage s3://mybucket/{path} \\
+                --s3.endpoint http://172.16.4.4:30812 --send-credentials-to-tikv=true
             
             go-ycsb run mysql \\
                 -P /ycsb/workloads/{self.get_name()} \\
