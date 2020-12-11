@@ -11,13 +11,16 @@ def main():
     logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
     arguments = argparse.ArgumentParser()
-    arguments.add_argument("-tidb", type=str, help="tidb")
-    arguments.add_argument("-tikv", type=str, help="tikv")
-    arguments.add_argument("-pd", type=str, help="pd")
+    arguments.add_argument("-version", type=str, required=True, help="set version, eg: nightly,v4.0.8")
+    arguments.add_argument("-tidb", type=str, help="the tidb download URL")
+    arguments.add_argument("-tikv", type=str, help="the tikv download URL")
+    arguments.add_argument("-pd", type=str, help="the pd download URL")
 
-    arguments.add_argument("-baseline-tidb", type=str, help="tidb")
-    arguments.add_argument("-baseline-tikv", type=str, help="tikv")
-    arguments.add_argument("-baseline-pd", type=str, help="pd")
+    arguments.add_argument("-baseline-version", required=False, type=str,
+                           help="set baseline version, eg: nightly,v4.0.8")
+    arguments.add_argument("-baseline-tidb", type=str, help="set the baseline tidb download URL")
+    arguments.add_argument("-baseline-tikv", type=str, help="the the baseline tikv download URL")
+    arguments.add_argument("-baseline-pd", type=str, help="the the baseline pd download URL")
     args = arguments.parse_args()
 
     TPCCBenchmark(args).run()

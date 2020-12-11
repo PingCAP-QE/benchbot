@@ -22,6 +22,9 @@ class TPCCBenchmark:
             letters=''.join(random.choice(letters) for _ in range(5)),
             digits=''.join(random.choice(digits) for _ in range(9)))
 
+    def get_version(self):
+        return self.args["version"]
+
     def get_tidb_version(self):
         return self.args["tidb"]
 
@@ -30,6 +33,9 @@ class TPCCBenchmark:
 
     def get_pd_version(self):
         return self.args["pd"]
+
+    def get_baseline_version(self):
+        return self.args["baseline_version"]
 
     def get_baseline_tidb_version(self):
         return self.args["baseline_tidb"]
@@ -50,17 +56,18 @@ class TPCCBenchmark:
             kubectl.delete_ns(self.ns)
 
     def run_with_baseline(self):
-        pr_results = self.run_naglfar(version="nightly",
+        pr_results = self.run_naglfar(version=self.get_version(),
                                       tidb_url=self.get_tidb_version(),
                                       tikv_url=self.get_tikv_version(),
                                       pd_url=self.get_pd_version())
 
-        base_results = self.run_naglfar(version="nightly",
-                                        tidb_url=self.get_baseline_tidb_version(),
-                                        tikv_url=self.get_baseline_tikv_version(),
-                                        pd_url=self.get_baseline_pd_version())
+        if self.get_baseline_version():
+            base_results = self.run_naglfar(version=self.get_baseline_tidb_version(),
+                                            tidb_url=self.get_baseline_tidb_version(),
+                                            tikv_url=self.get_baseline_tikv_version(),
+                                            pd_url=self.get_baseline_pd_version())
 
-        TPCCBenchmark.generate_report(base_results, pr_results)
+            TPCCBenchmark.generate_report(base_results, pr_results)
 
     def run_naglfar(self,
                     version: str,
@@ -73,9 +80,9 @@ class TPCCBenchmark:
                                                                 pd_download_url=pd_url))
         naglfar.wait_tct_ready(self.ns, TPCCBenchmark.tct_name())
         host_ip, port = naglfar.get_mysql_endpoint(ns=self.ns, tidb_node=TPCCBenchmark.tidb_node())
-        version = cluster_version(tidb_host=host_ip, tidb_port=port)
+        cluster_info = cluster_version(tidb_host=host_ip, tidb_port=port)
 
-        tw_file = kubectl.apply(self.gen_test_workload())
+        tw_file = kubectl.apply(self.gen_test_workload(version=version))
         naglfar.wait_tw_status(self.ns, TPCCBenchmark.tw_name(), lambda status: status != "'pending'")
 
         std_log = naglfar.tail_tw_logs(self.ns, TPCCBenchmark.tw_name())
@@ -85,7 +92,7 @@ class TPCCBenchmark:
         kubectl.delete(tw_file)
         kubectl.delete(tct_file)
         return {
-            "cluster_info": version,
+            "cluster_info": cluster_info,
             "bench_result": TPCCBenchmark.process_bench_result(result)
         }
 
@@ -106,7 +113,7 @@ class TPCCBenchmark:
 
     @staticmethod
     def tw_name():
-        return "tpcc200"
+        return "tpcc1000"
 
     @staticmethod
     def tidb_node():
@@ -187,7 +194,13 @@ spec:
         deployDir: /disk1/deploy/grafana-3000
 """
 
-    def gen_test_workload(self) -> str:
+    def gen_test_workload(self, version: str) -> str:
+        path = "tpcc-1000-new"
+        tag = "latest"
+        if version.startswith("v4.0."):
+            path = "tpcc-1000-4.0"
+            tag = "tidb-4.0"
+
         return f"""
 apiVersion: naglfar.pingcap.com/v1
 kind: TestWorkload
@@ -204,7 +217,7 @@ spec:
         resourceRequest:
           name: {TPCCBenchmark.request_name()}
           node: workload
-        image: "hub.pingcap.net/mahjonp/bench-toolset"
+        image: "hub.pingcap.net/mahjonp/bench-toolset:{tag}"
         imagePullPolicy: Always
         command:
           - /bin/sh
@@ -215,14 +228,14 @@ spec:
             tidb=`echo $cluster_tidb0 | awk -F ":" '{{print $1}}'`
             bench-toolset bench tpcc \
              --host $tidb --port 4000 \
-             --warehouses 200 \
+             --db tpcc
+             --warehouses 1000 \
              --time 30m \
              --threads 200 \
              --log "/var/log/test.log" \
-             --br-args "db" \
-             --br-args "--db=test" \
+             --br-args "full" \
              --br-args "--pd=$cluster_pd0" \
-             --br-args "--storage=s3://mybucket/tpcc-200" \
+             --br-args "--storage=s3://mybucket/{path}" \
              --br-args "--s3.endpoint=http://172.16.4.4:30812" \
              --br-args "--send-credentials-to-tikv=true" \
              --json
