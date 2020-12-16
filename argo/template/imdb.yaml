@@ -1,9 +1,9 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: naglfar-tpcc1000-importer-
+  generateName: naglfar-imdb-importer-
 spec:
-  entrypoint: tipocket-tpcc1000-importer
+  entrypoint: tipocket-imdb-importer
   arguments:
     parameters:
       - name: namespace # namespace
@@ -12,7 +12,7 @@ spec:
       - name: resource_request  # resource request name
       - name: workload_name     # workload node name
   templates:
-    - name: tipocket-tpcc1000-importer
+    - name: tipocket-imdb-importer
       resource:
         action: create
         successCondition: status.state = finish
@@ -20,14 +20,14 @@ spec:
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload
           metadata:
-            name: tpcc1000-importer
+            name: imdb-importer
             namespace: {{workflow.parameters.namespace}}
           spec:
             clusterTopologies:
               - name: {{workflow.parameters.test_cluster_name}}
                 aliasName: cluster
             workloads:
-              - name: tpcc1000-importer
+              - name: imdb-importer
                 dockerContainer:
                   resourceRequest:
                     name: {{workflow.parameters.resource_request}}
@@ -41,11 +41,11 @@ spec:
                       set -ex
                       export AWS_ACCESS_KEY_ID=YOURACCESSKEY AWS_SECRET_ACCESS_KEY=YOURSECRETKEY
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
-                      path="s3://mybucket/tpcc-1000-new"
+                      path="s3://mybucket/imdb"
                       if [ "{{workflow.parameters.tag}}" = "tidb-4.0" ]; then
-                        path="s3://mybucket/tpcc-1000-4.0"
+                        path="s3://mybucket/imdb-4.0"
                       fi
-                      br restore db --db "tpcc" --pd=$cluster_pd0 \
+                      br restore db --db "imdb" --pd=$cluster_pd0 \
                               --storage=$path \
                               --s3.endpoint=http://172.16.4.4:30812 \
                               --send-credentials-to-tikv=true
