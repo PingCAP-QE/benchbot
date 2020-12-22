@@ -1,0 +1,246 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: naglfar-tpch10-importer-
+spec:
+  entrypoint: starter
+  arguments:
+    parameters:
+      - name: namespace # namespace
+      - name: tag       # tag(different version uses different BRs), fill in: latest,tidb-4.0
+      - name: workload_name     # workload node name
+  templates:
+    - name: starter
+      dag:
+        tasks:
+        - name: request_cluster
+          template: request_cluster
+        - name: create_cluster
+          template: create_cluster
+          dependencies: [request_cluster]
+        - name: importer-logs-1
+          template: importer-logs
+          dependencies: [create_cluster]
+        - name: benching-logs-1
+          template: benching-logs
+          dependencies: [importer-logs-1]
+        - name: importer-logs-2
+          template: importer-logs
+          dependencies: [benching-logs-1]
+        - name: benching-logs-2
+          template: benching-logs
+          dependencies: [importer-logs-2]
+    - name: importer-logs
+      dag:
+        tasks:
+          - name: importing
+            template: importing
+          - name: importing-logs
+            template: logs
+            arguments:
+              parameters: [{name: workload_name, value: "tpch10-importing"}]
+          - name: importing-deletion
+            template: workload-deletion
+            dependencies: [importing, importing-logs]
+            arguments:
+              parameters: [{name: workload_name, value: "tpch10-importing"}]
+    - name: benching-logs
+      dag:
+        tasks:
+          - name: benching
+            template: benching
+          - name: benching-logs
+            template: logs
+            arguments:
+              parameters: [{name: workload_name, value: "tpch10-benching"}]
+          - name: importing-deletion
+            template: workload-deletion
+            dependencies: [benching, benching-logs]
+            arguments:
+              parameters: [{name: workload_name, value: "tpch10-benching"}]
+    - name: logs
+      inputs:
+        parameters:
+          - name: workload_name
+      container:
+        name: logs
+        image: 'argoproj/argoexec:latest'
+        imagePullPolicy: IfNotPresent
+        command:
+          - sh
+          - '-c'
+          - |
+            while true
+            do
+                state=`kubectl get tw {{inputs.parameters.workload_name}} -n {{workflow.parameters.namespace}} -ojsonpath='{.status.state}' || echo pending`
+                if [ "running" = "$state" ]; then
+                    break
+                fi
+                if [ "finish" = "$state" ]; then
+                    break
+                fi
+                echo "workload isn't already now. Wait 10s..."
+                sleep 10
+            done
+            curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/PingCAP-QE/Naglfar/master/scripts/kubectl-naglfar-installer.sh | sh
+            export PATH=$PATH:/root/.Naglfar/bin
+            naglfar logs {{inputs.parameters.workload_name}} -n {{workflow.parameters.namespace}} --follow
+    - name: request_cluster
+      resource:
+        - action: create
+          successCondition: status.state = ready
+          manifest: |
+            apiVersion: naglfar.pingcap.com/v1
+            kind: TestResourceRequest
+            metadata:
+              name: tidb-cluster
+              namespace: {{workflow.parameters.namespace}}
+            spec:
+              machines:
+                - name: m1
+                  exclusive: true
+              items:
+                - name: tidb
+                  spec:
+                    memory: 32GB
+                    cores: 16
+                    machine: m1
+                - name: pd
+                  spec:
+                    memory: 8GB
+                    cores: 2
+                    machine: m1
+                - name: tikv-1
+                  spec:
+                    memory: 32GB
+                    cores: 16
+                    disks:
+                      disk1:
+                        kind: nvme
+                        mountPath: /disk1
+                    machine: m2
+                - name: workload
+                  spec:
+                    memory: 8GB
+                    cores: 4
+                    machine: m1
+    - name: create_cluster
+      resource:
+        - action: create
+          successCondition: status.state = ready
+          manifest: |
+            apiVersion: naglfar.pingcap.com/v1
+            kind: TestClusterTopology
+            metadata:
+              name: tidb-cluster
+              namespace: {{workflow.parameters.namespace}}
+            spec:
+              resourceRequest: tidb-cluster
+              tidbCluster:
+                serverConfigs:
+                  tidb: |-
+                  tikv: |-
+                  pd: |-
+                version:
+                  version: v4.0.8
+                control: tidb
+                tikv:
+                  - host: tikv-1
+                    port: 20160
+                    statusPort: 20180
+                    deployDir: /disk1/deploy/tikv-20160
+                    dataDir: /disk1/data/tikv-20160
+                    logDir: /disk1/deploy/tikv-20160/log
+                tidb:
+                  - host: tidb
+                    deployDir: /disk1/deploy/tidb-4000
+                pd:
+                  - host: pd
+                    deployDir: /disk1/deploy/pd-2379
+                    dataDir: /disk1/data/pd-2379
+                    logDir: /disk1/deploy/pd-2379/log
+                monitor:
+                  - host: tidb
+                    deployDir: /disk1/deploy/prometheus-8249
+                    dataDir: /disk1/deploy/prometheus-8249/data
+                grafana:
+                  - host: tidb
+                    deployDir: /disk1/deploy/grafana-3000
+    - name: importing
+      resource:
+        action: create
+        successCondition: status.state = finish
+        manifest: |
+          apiVersion: naglfar.pingcap.com/v1
+          kind: TestWorkload
+          metadata:
+            name: tpch10-importing
+            namespace: {{workflow.parameters.namespace}}
+          spec:
+            clusterTopologies:
+              - name: tidb-cluster
+                aliasName: cluster
+            workloads:
+              - name: tpch10-importing
+                dockerContainer:
+                  resourceRequest:
+                    name: tidb-cluster
+                    node: workload
+                  image: "hub.pingcap.net/mahjonp/bench-toolset:{{workflow.parameters.tag}}"
+                  imagePullPolicy: IfNotPresent
+                  command:
+                    - /bin/sh
+                    - -c
+                    - |
+                      set -ex
+                      export AWS_ACCESS_KEY_ID=YOURACCESSKEY AWS_SECRET_ACCESS_KEY=YOURSECRETKEY
+                      tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
+                      path="s3://mybucket/tpch10"
+                      if [ "{{workflow.parameters.tag}}" = "tidb-4.0" ]; then
+                        path="s3://mybucket/tpch10-release4.0"
+                      fi
+                      br restore db --db "tpch10" --pd=$cluster_pd0 \
+                              --storage=$path \
+                              --s3.endpoint=http://172.16.4.4:30812 \
+                              --send-credentials-to-tikv=true
+    - name: benching
+      resource:
+        action: create
+        successCondition: status.state = finish
+        manifest: |
+          apiVersion: naglfar.pingcap.com/v1
+          kind: TestWorkload
+          metadata:
+            name: tpch10-benching
+            namespace: {{workflow.parameters.namespace}}
+          spec:
+            clusterTopologies:
+              - name: tidb-cluster
+                aliasName: cluster
+            workloads:
+              - name: tpch10-benching
+                dockerContainer:
+                  resourceRequest:
+                    name: tidb-cluster
+                    node: workload
+                  image: "docker.io/mahjonp/go-tpc"
+                  imagePullPolicy: IfNotPresent
+                  command:
+                    - /bin/sh
+                    - -c
+                    - |
+                      set -ex
+                      tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
+                      /go-tpc -H $tidb -P4000 -D tpch10 tpch --sf=10 --queries q1,q2,q3,q4,q6,q7,q8,q9,q10,q11,q12,q13,q14,q15,q16,q17,q18,q19,q20,q21,q22 run --time 5m
+    - name: workload-deletion
+      inputs:
+        parameters:
+          - name: workload_name
+      resource:
+        action: delete
+        manifest: |
+          apiVersion: naglfar.pingcap.com/v1
+          kind: TestWorkload
+          metadata:
+            name: {{inputs.parameters.workload_name}}
+            namespace: {{workflow.parameters.namespace}}
