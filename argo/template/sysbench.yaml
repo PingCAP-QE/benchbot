@@ -134,7 +134,7 @@ spec:
                   machine: m1
               - name: tikv-1
                 spec:
-                  memory: 32GB
+                  memory: 64GB
                   cores: 16
                   disks:
                     disk1:
