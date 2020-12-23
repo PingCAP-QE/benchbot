@@ -168,6 +168,9 @@ spec:
               serverConfigs:
                 tidb: |-
                 tikv: |-
+                  #rocksdb.defaultcf.block-cache-size: "16GB"
+                  #rocksdb.writecf.block-cache-size: "9GB"
+                  #rocksdb.lockcf.block-cache-size: "1GB"
                 pd: |-
               version:
                 version: {{inputs.parameters.release-branch}}
