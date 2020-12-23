@@ -8,7 +8,7 @@ spec:
   arguments:
     parameters:
       - name: oltp_method
-        value: oltp_point_select #oltp_index_update, oltp_non_index_update
+        value: oltp_point_select # oltp_insert, oltp_update_index, oltp_update_non_index, oltp_read_only, oltp_read_write, oltp_write_only
       - name: baseline-release
         value: v3.0.19
       - name: baseline-tidb-url
@@ -27,70 +27,57 @@ spec:
         value: ""
   templates:
     - name: starter
-      dag:
-        tasks:
-        - name: create-ns
-          template: create-ns
-        - name: request-cluster
-          template: request-cluster
-          dependencies: [create-ns]
-        - name: create-cluster
-          template: create-cluster
-          dependencies: [request-cluster]
-          arguments:
-            parameters: [{name: release-branch, value: "{{workflow.parameters.release}}"},
-                         {name: tidb-url, value: "{{workflow.parameters.tidb-url}}"},
-                         {name: tikv-url, value: "{{workflow.parameters.tikv-url}}"},
-                         {name: pd-url, value: "{{workflow.parameters.pd-url}}"}]
-        - name: importer-logs-1
-          template: importer-logs
-          dependencies: [create-cluster]
-        - name: benching-logs-1
-          template: benching-logs
-          dependencies: [importer-logs-1]
-        - name: uninstall-cluster
-          template: uninstall-cluster
-          dependencies: [benching-logs-1]
-        - name: create-cluster-baseline
-          template: create-cluster
-          dependencies: [uninstall-cluster]
-          arguments:
-            parameters: [{name: release-branch, value: "{{workflow.parameters.baseline-release}}"},
-                         {name: tidb-url, value: "{{workflow.parameters.baseline-tidb-url}}"},
-                         {name: tikv-url, value: "{{workflow.parameters.baseline-tikv-url}}"},
-                         {name: pd-url, value: "{{workflow.parameters.baseline-pd-url}}"}]
-        - name: importer-logs-2
-          template: importer-logs
-          dependencies: [create-cluster-baseline]
-        - name: benching-logs-2
-          template: benching-logs
-          dependencies: [importer-logs-2]
+      steps:
+        - - name: create-ns
+            template: create-ns
+        - - name: request-cluster
+            template: request-cluster
+        - - name: create-cluster
+            template: create-cluster
+            arguments:
+              parameters: [{name: release-branch, value: "{{workflow.parameters.release}}"},
+                           {name: tidb-url, value: "{{workflow.parameters.tidb-url}}"},
+                           {name: tikv-url, value: "{{workflow.parameters.tikv-url}}"},
+                           {name: pd-url, value: "{{workflow.parameters.pd-url}}"}]
+        - - name: importer-logs-1
+            template: importer-logs
+        - - name: benching-logs-1
+            template: benching-logs
+        - - name: uninstall-cluster
+            template: uninstall-cluster
+        - - name: create-cluster-baseline
+            template: create-cluster
+            arguments:
+              parameters: [{name: release-branch, value: "{{workflow.parameters.baseline-release}}"},
+                           {name: tidb-url, value: "{{workflow.parameters.baseline-tidb-url}}"},
+                           {name: tikv-url, value: "{{workflow.parameters.baseline-tikv-url}}"},
+                           {name: pd-url, value: "{{workflow.parameters.baseline-pd-url}}"}]
+        - - name: importer-logs-2
+            template: importer-logs
+        - - name: benching-logs-2
+            template: benching-logs
     - name: importer-logs
-      dag:
-        tasks:
-          - name: importing
+      steps:
+        - - name: importing
             template: importing
           - name: importing-logs
             template: logs
             arguments:
               parameters: [{name: workload_name, value: "sysbench-importing"}]
-          - name: importing-deletion
+        - - name: importing-deletion
             template: workload-deletion
-            dependencies: [importing, importing-logs]
             arguments:
               parameters: [{name: workload_name, value: "sysbench-importing"}]
     - name: benching-logs
-      dag:
-        tasks:
-          - name: benching
+      steps:
+        - - name: benching
             template: benching
           - name: benching-logs
             template: logs
             arguments:
               parameters: [{name: workload_name, value: "sysbench-benching"}]
-          - name: importing-deletion
+        - - name: importing-deletion
             template: workload-deletion
-            dependencies: [benching, benching-logs]
             arguments:
               parameters: [{name: workload_name, value: "sysbench-benching"}]
     - name: logs
