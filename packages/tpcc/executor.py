@@ -224,7 +224,7 @@ spec:
           - -c
           - |
             set -ex
-            export AWS_ACCESS_KEY_ID=YOURACCESSKEY AWS_SECRET_ACCESS_KEY=YOURSECRETKEY
+            export AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin
             tidb=`echo $cluster_tidb0 | awk -F ":" '{{print $1}}'`
             bench-toolset bench tpcc \
              --host $tidb --port 4000 \
@@ -235,8 +235,8 @@ spec:
              --log "/var/log/test.log" \
              --br-args "full" \
              --br-args "--pd=$cluster_pd0" \
-             --br-args "--storage=s3://mybucket/{path}" \
-             --br-args "--s3.endpoint=http://172.16.4.4:30812" \
+             --br-args "--storage=s3://benchmark/{path}" \
+             --br-args "--s3.endpoint=http://172.16.5.109:9000" \
              --br-args "--send-credentials-to-tikv=true" \
              --json
 """

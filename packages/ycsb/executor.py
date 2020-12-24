@@ -224,7 +224,7 @@ spec:
           - -c
           - |
             set -ex
-            export AWS_ACCESS_KEY_ID=YOURACCESSKEY AWS_SECRET_ACCESS_KEY=YOURSECRETKEY
+            export AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin
             tidb=`echo $cluster_tidb0 | awk -F ":" '{{print $1}}'`
             pd=`echo $cluster_pd0 | awk -F ":" '{{print $1}}'`
 
@@ -236,8 +236,8 @@ spec:
             echo "threadcount=500" >> global.conf
             echo "requestdistribution=zipfian" >> global.conf
 
-            br restore db --db=test --pd $pd:2379 --storage s3://mybucket/{path} \\
-                --s3.endpoint http://172.16.4.4:30812 --send-credentials-to-tikv=true
+            br restore db --db=test --pd $pd:2379 --storage s3://benchmark/{path} \\
+                --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
             
             go-ycsb run mysql \\
                 -P /ycsb/workloads/{self.get_name()} \\
