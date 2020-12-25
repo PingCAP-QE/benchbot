@@ -7,10 +7,12 @@ spec:
   onExit: delete-ns
   arguments:
     parameters:
+      - name: bench-toolset-branch
+        value: latest            # option: latest | tidb-4.0 | tidb-3.0 . latest for master or 5.0-rc, tidb-4.0 for release-4.0
       - name: oltp_method
         value: oltp_point_select # oltp_insert, oltp_update_index, oltp_update_non_index, oltp_read_only, oltp_read_write, oltp_write_only
       - name: baseline-release
-        value: v3.0.19
+        value: nightly
       - name: baseline-tidb-url
         value: ""
       - name: baseline-tikv-url
@@ -18,7 +20,7 @@ spec:
       - name: baseline-pd-url
         value: ""
       - name: release
-        value: v3.0.19
+        value: v4.0.9
       - name: tidb-url
         value: ""
       - name: tikv-url
@@ -41,6 +43,8 @@ spec:
                            {name: pd-url, value: "{{workflow.parameters.pd-url}}"}]
         - - name: importer-logs-1
             template: importer-logs
+            arguments:
+              parameters: [{name: release-branch, value: "{{workflow.parameters.release}}"}]
         - - name: benching-logs-1
             template: benching-logs
         - - name: uninstall-cluster
@@ -54,12 +58,19 @@ spec:
                            {name: pd-url, value: "{{workflow.parameters.baseline-pd-url}}"}]
         - - name: importer-logs-2
             template: importer-logs
+            arguments:
+              parameters: [{name: release-branch, value: "{{workflow.parameters.baseline-release}}"}]
         - - name: benching-logs-2
             template: benching-logs
     - name: importer-logs
+      inputs:
+        parameters:
+          - name: release-branch
       steps:
         - - name: importing
             template: importing
+            arguments:
+              parameters: [{name: release-branch, value: "{{inputs.parameters.release-branch}}"}]
           - name: importing-logs
             template: logs
             arguments:
@@ -210,6 +221,9 @@ spec:
             name: tidb-cluster
             namespace: {{workflow.name}}
     - name: importing
+      inputs:
+        parameters:
+          - name: release-branch
       resource:
         action: create
         successCondition: status.state = finish
@@ -229,24 +243,41 @@ spec:
                   resourceRequest:
                     name: tidb-cluster
                     node: workload
-                  image: "hub.pingcap.net/mahjonp/bench-toolset"
+                  image: "hub.pingcap.net/mahjonp/bench-toolset:{{workflow.parameters.bench-toolset-branch}}"
                   imagePullPolicy: IfNotPresent
                   command:
-                    - /bin/sh
+                    - /bin/bash
                     - -c
                     - |
+                      #!/bin/bash
                       set -ex
                       export AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
-                      sysbench oltp_point_select prepare \
+                      pd=`echo $cluster_pd0 | awk -F ":" '{print $1}'`
+                      release_branch="{{inputs.parameters.release-branch}}"
+                      if [[ ${release_branch:0:4} == "v3.0" ]]; then
+                        sysbench oltp_point_select prepare \
                                     --mysql-host=$tidb \
                                     --mysql-port=4000 \
                                     --mysql-user=root \
                                     --db-driver=mysql \
-                                    --tables=10 \
+                                    --tables=32 \
                                     --table-size=10000000 \
                                     --mysql-db=test \
                                     --threads=10
+                      elif [[ ${release_branch:0:4} == "v4.0" ]]; then
+                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/sysbench-32-10000000-release4.0 \
+                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                      elif [[ ${release_branch:0:4} == "v5.0" ]]; then
+                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/sysbench-32-10000000-release4.0 \
+                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                      elif [[ ${release_branch} == "nightly" ]]; then
+                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/sysbench-32-10000000 \
+                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                      else
+                        echo "illegal release_branch: $release_branch"
+                        exit 1
+                      fi
     - name: benching
       resource:
         action: create
@@ -280,7 +311,7 @@ spec:
                                     --mysql-port=4000 \
                                     --mysql-user=root \
                                     --db-driver=mysql \
-                                    --tables=10 \
+                                    --tables=32 \
                                     --table-size=10000000 \
                                     --mysql-db=test \
                                     --threads=100 \
