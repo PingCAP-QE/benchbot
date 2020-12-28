@@ -217,7 +217,7 @@ spec:
         resourceRequest:
           name: {YCSBBenchmark.request_name()}
           node: workload
-        image: "hub.pingcap.net/mahjonp/bench-toolset:test"
+        image: "hub.pingcap.net/mahjonp/bench-toolset:{tag}"
         imagePullPolicy: Always
         command:
           - /bin/sh
