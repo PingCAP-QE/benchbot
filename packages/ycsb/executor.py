@@ -24,6 +24,9 @@ class YCSBBenchmark:
     def get_version(self):
         return self.args["version"]
 
+    def get_toolset_version(self):
+        return self.args["toolset"]
+
     def get_tidb_version(self):
         return self.args["tidb"]
 
@@ -45,6 +48,9 @@ class YCSBBenchmark:
     def get_baseline_pd_version(self):
         return self.args["baseline_pd"]
 
+    def get_baseline_toolset_version(self):
+        return self.args["baseline_toolset"]
+
     def get_name(self):
         return self.args["name"]
 
@@ -61,13 +67,15 @@ class YCSBBenchmark:
         pr_results = self.run_naglfar(version=self.get_version(),
                                       tidb_url=self.get_tidb_version(),
                                       tikv_url=self.get_tikv_version(),
-                                      pd_url=self.get_pd_version())
+                                      pd_url=self.get_pd_version(),
+                                      toolset_version=self.get_toolset_version())
 
         if self.get_baseline_version():
             base_results = self.run_naglfar(version=self.get_baseline_version(),
                                             tidb_url=self.get_baseline_tidb_version(),
                                             tikv_url=self.get_baseline_tikv_version(),
-                                            pd_url=self.get_baseline_pd_version())
+                                            pd_url=self.get_baseline_pd_version(),
+                                            toolset_version=self.get_baseline_toolset_version())
 
             YCSBBenchmark.generate_report(base_results, pr_results)
 
@@ -75,7 +83,8 @@ class YCSBBenchmark:
                     version: str,
                     tidb_url: str = None,
                     pd_url: str = None,
-                    tikv_url: str = None):
+                    tikv_url: str = None,
+                    toolset_version: str = None):
         tct_file = kubectl.apply(self.gen_test_cluster_topology(version=version,
                                                                 tidb_download_url=tidb_url,
                                                                 tikv_download_url=tikv_url,
@@ -84,7 +93,7 @@ class YCSBBenchmark:
         host_ip, port = naglfar.get_mysql_endpoint(ns=self.ns, tidb_node=YCSBBenchmark.tidb_node())
         version = cluster_version(tidb_host=host_ip, tidb_port=port)
 
-        tw_file = kubectl.apply(self.gen_test_workload(version=self.get_version()))
+        tw_file = kubectl.apply(self.gen_test_workload(version=self.get_version(), toolset_version=toolset_version))
         naglfar.wait_tw_status(self.ns, YCSBBenchmark.tw_name(), lambda status: status != "'pending'")
 
         std_log = naglfar.tail_tw_logs(self.ns, YCSBBenchmark.tw_name())
@@ -190,17 +199,16 @@ spec:
         deployDir: /disk1/deploy/grafana-3000
 """
 
-    def gen_test_workload(self, version: str) -> str:
+    def gen_test_workload(self, version: str, toolset_version: str) -> str:
         """
         @mahjonp fix me: replace test tag with `tag`
+        :param toolset_version:
         :param version:
         :return:
         """
         path = "ycsb-100m"
-        tag = "latest"
         if version.startswith("v4.0."):
             path = "ycsb-100m-release4.0"
-            tag = "tidb-4.0"
         return f"""
 apiVersion: naglfar.pingcap.com/v1
 kind: TestWorkload
@@ -217,7 +225,7 @@ spec:
         resourceRequest:
           name: {YCSBBenchmark.request_name()}
           node: workload
-        image: "hub.pingcap.net/mahjonp/bench-toolset:{tag}"
+        image: "hub.pingcap.net/mahjonp/bench-toolset:{toolset_version}"
         imagePullPolicy: Always
         command:
           - /bin/sh
