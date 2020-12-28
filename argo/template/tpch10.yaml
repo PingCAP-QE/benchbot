@@ -4,60 +4,101 @@ metadata:
   generateName: naglfar-tpch10-importer-
 spec:
   entrypoint: starter
+  onExit: delete-ns
   arguments:
     parameters:
-      - name: namespace # namespace
-      - name: tag       # tag(different version uses different BRs), fill in: latest,tidb-4.0
-      - name: workload_name     # workload node name
+      - name: queries
+        value: "q1,q2,q3,q4,q6,q7,q8,q9,q10,q11,q12,q13,q14,q15,q16,q17,q18,q19,q20,q21,q22"
+      ######################################### current part
+      - name: release                           # release version: nightly, v3.0.x, v4.0.x
+        value: v4.0.8
+      - name: tidb-url
+        value: "" #"http://fileserver.pingcap.net/download/builds/pingcap/tidb/507d535131c9e449ae02ab60374af123ac76b19b/centos7/tidb-server.tar.gz"
+      - name: tikv-url
+        value: "" # "http://fileserver.pingcap.net/download/builds/pingcap/tikv/d71c78ef7c74b65e429ce24bd91389d06eb8ec0b/centos7/tikv-server.tar.gz"
+      - name: pd-url
+        value: "" # "http://fileserver.pingcap.net/download/builds/pingcap/pd/fa65de5a11fe0b2e6a1783f5af4c7b6e81ddd271/centos7/pd-server.tar.gz"
+      - name: toolset-tag                       # we use br to restore data, so you need fill in the toolset version
+        value: tidb-4.0 # tidb-5.0-rc                      # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
+      ######################################### baseline part
+      - name: baseline-release
+        value: v4.0.8
+      - name: baseline-tidb-url                 # if need to patch baseline tidb binary version
+        value: ""
+      - name: baseline-tikv-url
+        value: ""
+      - name: baseline-pd-url
+        value: ""
+      - name: baseline-toolset-tag             # we use br to restore data, so you need fill in the toolset version
+        value: tidb-4.0 # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
   templates:
     - name: starter
-      dag:
-        tasks:
-        - name: request_cluster
-          template: request_cluster
-        - name: create_cluster
-          template: create_cluster
-          dependencies: [request_cluster]
-        - name: importer-logs-1
-          template: importer-logs
-          dependencies: [create_cluster]
-        - name: benching-logs-1
-          template: benching-logs
-          dependencies: [importer-logs-1]
-        - name: importer-logs-2
-          template: importer-logs
-          dependencies: [benching-logs-1]
-        - name: benching-logs-2
-          template: benching-logs
-          dependencies: [importer-logs-2]
+      steps:
+        - - name: create-ns
+            template: create-ns
+        - - name: request-cluster
+            template: request-cluster
+        - - name: create-cluster
+            template: create-cluster
+            arguments:
+              parameters: [ { name: release-branch, value: "{{workflow.parameters.release}}" },
+                            { name: tidb-url, value: "{{workflow.parameters.tidb-url}}" },
+                            { name: tikv-url, value: "{{workflow.parameters.tikv-url}}" },
+                            { name: pd-url, value: "{{workflow.parameters.pd-url}}" } ]
+        - - name: importer-logs-1
+            template: importer-logs
+            arguments:
+              parameters: [ { name: toolset-tag,   value: "{{workflow.parameters.toolset-tag}}" },
+                            { name: release-branch, value: "{{workflow.parameters.release}}" } ]
+        - - name: benching-logs-1
+            template: benching-logs
+        - - name: uninstall-cluster
+            template: uninstall-cluster
+        - - name: create-cluster-baseline
+            template: create-cluster
+            arguments:
+              parameters: [ { name: release-branch, value: "{{workflow.parameters.baseline-release}}" },
+                            { name: tidb-url, value: "{{workflow.parameters.baseline-tidb-url}}" },
+                            { name: tikv-url, value: "{{workflow.parameters.baseline-tikv-url}}" },
+                            { name: pd-url, value: "{{workflow.parameters.baseline-pd-url}}" } ]
+        - - name: importer-logs-2
+            template: importer-logs
+            arguments:
+              parameters: [ { name: toolset-tag,   value: "{{workflow.parameters.baseline-toolset-tag}}" },
+                            { name: release-branch, value: "{{workflow.parameters.baseline-release}}" } ]
+        - - name: benching-logs-2
+            template: benching-logs
     - name: importer-logs
-      dag:
-        tasks:
-          - name: importing
+      inputs:
+        parameters:
+          - name: toolset-tag
+          - name: release-branch
+      steps:
+        - - name: importing
             template: importing
+            arguments:
+              parameters: [ { name: toolset-tag,    value: "{{inputs.parameters.toolset-tag}}" },
+                            { name: release-branch, value: "{{inputs.parameters.release-branch}}" }]
           - name: importing-logs
             template: logs
             arguments:
-              parameters: [{name: workload_name, value: "tpch10-importing"}]
-          - name: importing-deletion
+              parameters: [ { name: workload_name, value: "tpch10-importing" } ]
+        - - name: importing-deletion
             template: workload-deletion
-            dependencies: [importing, importing-logs]
             arguments:
-              parameters: [{name: workload_name, value: "tpch10-importing"}]
+              parameters: [ { name: workload_name, value: "tpch10-importing" } ]
     - name: benching-logs
-      dag:
-        tasks:
-          - name: benching
+      steps:
+        - - name: benching
             template: benching
           - name: benching-logs
             template: logs
             arguments:
-              parameters: [{name: workload_name, value: "tpch10-benching"}]
-          - name: importing-deletion
+              parameters: [ { name: workload_name, value: "tpch10-benching" } ]
+        - - name: importing-deletion
             template: workload-deletion
-            dependencies: [benching, benching-logs]
             arguments:
-              parameters: [{name: workload_name, value: "tpch10-benching"}]
+              parameters: [ { name: workload_name, value: "tpch10-benching" } ]
     - name: logs
       inputs:
         parameters:
@@ -72,7 +113,7 @@ spec:
           - |
             while true
             do
-                state=`kubectl get tw {{inputs.parameters.workload_name}} -n {{workflow.parameters.namespace}} -ojsonpath='{.status.state}' || echo pending`
+                state=`kubectl get tw {{inputs.parameters.workload_name}} -n {{workflow.name}} -ojsonpath='{.status.state}' || echo pending`
                 if [ "running" = "$state" ]; then
                     break
                 fi
@@ -84,89 +125,114 @@ spec:
             done
             curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/PingCAP-QE/Naglfar/master/scripts/kubectl-naglfar-installer.sh | sh
             export PATH=$PATH:/root/.Naglfar/bin
-            naglfar logs {{inputs.parameters.workload_name}} -n {{workflow.parameters.namespace}} --follow
-    - name: request_cluster
+            naglfar logs {{inputs.parameters.workload_name}} -n {{workflow.name}} --follow
+    - name: request-cluster
       resource:
-        - action: create
-          successCondition: status.state = ready
-          manifest: |
-            apiVersion: naglfar.pingcap.com/v1
-            kind: TestResourceRequest
-            metadata:
-              name: tidb-cluster
-              namespace: {{workflow.parameters.namespace}}
-            spec:
-              machines:
-                - name: m1
-                  exclusive: true
-              items:
-                - name: tidb
-                  spec:
-                    memory: 32GB
-                    cores: 16
-                    machine: m1
-                - name: pd
-                  spec:
-                    memory: 8GB
-                    cores: 2
-                    machine: m1
-                - name: tikv-1
-                  spec:
-                    memory: 32GB
-                    cores: 16
-                    disks:
-                      disk1:
-                        kind: nvme
-                        mountPath: /disk1
-                    machine: m2
-                - name: workload
-                  spec:
-                    memory: 8GB
-                    cores: 4
-                    machine: m1
-    - name: create_cluster
+        action: create
+        successCondition: status.state = ready
+        manifest: |
+          apiVersion: naglfar.pingcap.com/v1
+          kind: TestResourceRequest
+          metadata:
+            name: tidb-cluster
+            namespace: {{workflow.name}}
+          spec:
+            machines:
+              - name: m1
+                exclusive: true
+            items:
+              - name: tidb
+                spec:
+                  memory: 32GB
+                  cores: 16
+                  machine: m1
+              - name: pd
+                spec:
+                  memory: 8GB
+                  cores: 2
+                  machine: m1
+              - name: tikv-1
+                spec:
+                  memory: 64GB
+                  cores: 16
+                  disks:
+                    disk1:
+                      kind: nvme
+                      mountPath: /disk1
+                  machine: m1
+              - name: workload
+                spec:
+                  memory: 8GB
+                  cores: 4
+                  machine: m1
+    - name: create-cluster
+      inputs:
+        parameters:
+          - name: release-branch
+          - name: tidb-url
+          - name: tikv-url
+          - name: pd-url
       resource:
-        - action: create
-          successCondition: status.state = ready
-          manifest: |
-            apiVersion: naglfar.pingcap.com/v1
-            kind: TestClusterTopology
-            metadata:
-              name: tidb-cluster
-              namespace: {{workflow.parameters.namespace}}
-            spec:
-              resourceRequest: tidb-cluster
-              tidbCluster:
-                serverConfigs:
-                  tidb: |-
-                  tikv: |-
-                  pd: |-
-                version:
-                  version: v4.0.8
-                control: tidb
-                tikv:
-                  - host: tikv-1
-                    port: 20160
-                    statusPort: 20180
-                    deployDir: /disk1/deploy/tikv-20160
-                    dataDir: /disk1/data/tikv-20160
-                    logDir: /disk1/deploy/tikv-20160/log
-                tidb:
-                  - host: tidb
-                    deployDir: /disk1/deploy/tidb-4000
-                pd:
-                  - host: pd
-                    deployDir: /disk1/deploy/pd-2379
-                    dataDir: /disk1/data/pd-2379
-                    logDir: /disk1/deploy/pd-2379/log
-                monitor:
-                  - host: tidb
-                    deployDir: /disk1/deploy/prometheus-8249
-                    dataDir: /disk1/deploy/prometheus-8249/data
-                grafana:
-                  - host: tidb
-                    deployDir: /disk1/deploy/grafana-3000
+        action: create
+        successCondition: status.state = ready
+        manifest: |
+          apiVersion: naglfar.pingcap.com/v1
+          kind: TestClusterTopology
+          metadata:
+            name: tidb-cluster
+            namespace: {{workflow.name}}
+          spec:
+            resourceRequest: tidb-cluster
+            tidbCluster:
+              serverConfigs:
+                tidb: |-
+                tikv: |-
+                  #rocksdb.defaultcf.block-cache-size: "16GB"
+                  #rocksdb.writecf.block-cache-size: "9GB"
+                  #rocksdb.lockcf.block-cache-size: "1GB"
+                pd: |-
+              version:
+                version: {{inputs.parameters.release-branch}}
+                tidbDownloadURL: {{inputs.parameters.tidb-url}}
+                tikvDownloadURL: {{inputs.parameters.tikv-url}}
+                pdDownloadURL: {{inputs.parameters.pd-url}}
+              control: tidb
+              tikv:
+                - host: tikv-1
+                  port: 20160
+                  statusPort: 20180
+                  deployDir: /disk1/deploy/tikv-20160
+                  dataDir: /disk1/data/tikv-20160
+                  logDir: /disk1/deploy/tikv-20160/log
+              tidb:
+                - host: tidb
+                  deployDir: /disk1/deploy/tidb-4000
+              pd:
+                - host: pd
+                  deployDir: /disk1/deploy/pd-2379
+                  dataDir: /disk1/data/pd-2379
+                  logDir: /disk1/deploy/pd-2379/log
+              monitor:
+                - host: tidb
+                  deployDir: /disk1/deploy/prometheus-8249
+                  dataDir: /disk1/deploy/prometheus-8249/data
+              grafana:
+                - host: tidb
+                  deployDir: /disk1/deploy/grafana-3000
+    - name: uninstall-cluster
+      resource:
+        action: delete
+        manifest: |
+          apiVersion: naglfar.pingcap.com/v1
+          kind: TestClusterTopology
+          metadata:
+            name: tidb-cluster
+            namespace: {{workflow.name}}
     - name: importing
+      inputs:
+        parameters:
+          - name: toolset-tag
+          - name: release-branch
       resource:
         action: create
         successCondition: status.state = finish
@@ -175,7 +241,7 @@ spec:
           kind: TestWorkload
           metadata:
             name: tpch10-importing
-            namespace: {{workflow.parameters.namespace}}
+            namespace: {{workflow.name}}
           spec:
             clusterTopologies:
               - name: tidb-cluster
@@ -186,23 +252,33 @@ spec:
                   resourceRequest:
                     name: tidb-cluster
                     node: workload
-                  image: "hub.pingcap.net/mahjonp/bench-toolset:{{workflow.parameters.tag}}"
+                  image: "hub.pingcap.net/mahjonp/bench-toolset:{{inputs.parameters.toolset-tag}}"
                   imagePullPolicy: IfNotPresent
                   command:
-                    - /bin/sh
+                    - /bin/bash
                     - -c
                     - |
+                      #!/bin/bash
                       set -ex
-                      export AWS_ACCESS_KEY_ID=YOURACCESSKEY AWS_SECRET_ACCESS_KEY=YOURSECRETKEY
+                      export AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
-                      path="s3://mybucket/tpch10"
-                      if [ "{{workflow.parameters.tag}}" = "tidb-4.0" ]; then
-                        path="s3://mybucket/tpch10-release4.0"
+                      pd=`echo $cluster_pd0 | awk -F ":" '{print $1}'`
+                      release_branch="{{inputs.parameters.release-branch}}"
+                      if [[ ${release_branch:0:4} == "v3.0" ]]; then
+                        go-tpc -H $tidb -P4000 -D tpch10 tpch --sf=10 prepare
+                      elif [[ ${release_branch:0:4} == "v4.0" ]]; then
+                        br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10-release4.0 \
+                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                      elif [[ ${release_branch:0:4} == "v5.0" ]]; then
+                        br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10 \
+                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                      elif [[ ${release_branch} == "nightly" ]]; then
+                        br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10 \
+                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                      else
+                        echo "illegal release_branch: $release_branch"
+                        exit 1
                       fi
-                      br restore db --db "tpch10" --pd=$cluster_pd0 \
-                              --storage=$path \
-                              --s3.endpoint=http://172.16.4.4:30812 \
-                              --send-credentials-to-tikv=true
     - name: benching
       resource:
         action: create
@@ -212,7 +288,7 @@ spec:
           kind: TestWorkload
           metadata:
             name: tpch10-benching
-            namespace: {{workflow.parameters.namespace}}
+            namespace: {{workflow.name}}
           spec:
             clusterTopologies:
               - name: tidb-cluster
@@ -223,7 +299,7 @@ spec:
                   resourceRequest:
                     name: tidb-cluster
                     node: workload
-                  image: "docker.io/mahjonp/go-tpc"
+                  image: "hub.pingcap.net/mahjonp/bench-toolset"
                   imagePullPolicy: IfNotPresent
                   command:
                     - /bin/sh
@@ -231,7 +307,7 @@ spec:
                     - |
                       set -ex
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
-                      /go-tpc -H $tidb -P4000 -D tpch10 tpch --sf=10 --queries q1,q2,q3,q4,q6,q7,q8,q9,q10,q11,q12,q13,q14,q15,q16,q17,q18,q19,q20,q21,q22 run --time 5m
+                      go-tpc -H $tidb -P4000 -D tpch10 tpch --sf=10 --queries {{workflow.parameters.queries}} run --time 30m
     - name: workload-deletion
       inputs:
         parameters:
@@ -243,4 +319,21 @@ spec:
           kind: TestWorkload
           metadata:
             name: {{inputs.parameters.workload_name}}
-            namespace: {{workflow.parameters.namespace}}
+            namespace: {{workflow.name}}
+    - name: create-ns
+      resource:
+        action: create
+        successCondition: status.phase = Active
+        manifest: |
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: {{workflow.name}}
+    - name: delete-ns
+      resource:
+        action: delete
+        manifest: |
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: {{workflow.name}}

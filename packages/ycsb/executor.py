@@ -91,9 +91,9 @@ class YCSBBenchmark:
                                                                 pd_download_url=pd_url))
         naglfar.wait_tct_ready(self.ns, YCSBBenchmark.tct_name())
         host_ip, port = naglfar.get_mysql_endpoint(ns=self.ns, tidb_node=YCSBBenchmark.tidb_node())
-        version = cluster_version(tidb_host=host_ip, tidb_port=port)
+        cversion = cluster_version(tidb_host=host_ip, tidb_port=port)
 
-        tw_file = kubectl.apply(self.gen_test_workload(version=self.get_version(), toolset_version=toolset_version))
+        tw_file = kubectl.apply(self.gen_test_workload(version=version, toolset_version=toolset_version))
         naglfar.wait_tw_status(self.ns, YCSBBenchmark.tw_name(), lambda status: status != "'pending'")
 
         std_log = naglfar.tail_tw_logs(self.ns, YCSBBenchmark.tw_name())
@@ -104,7 +104,7 @@ class YCSBBenchmark:
         kubectl.delete(tw_file)
         kubectl.delete(tct_file)
         return {
-            "cluster_info": version,
+            "cluster_info": cversion,
             "bench_result": result,
         }
 
@@ -209,6 +209,7 @@ spec:
         path = "ycsb-100m"
         if version.startswith("v4.0."):
             path = "ycsb-100m-release4.0"
+
         return f"""
 apiVersion: naglfar.pingcap.com/v1
 kind: TestWorkload
