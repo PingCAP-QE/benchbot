@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: naglfar-tpch10-importer-
+  generateName: naglfar-tpch10-benching-
 spec:
   entrypoint: starter
   onExit: delete-ns
