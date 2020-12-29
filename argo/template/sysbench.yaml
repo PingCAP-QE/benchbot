@@ -117,7 +117,10 @@ spec:
                 if [ "running" = "$state" ]; then
                     break
                 fi
-                if [ "finish" = "$state" ]; then
+                if [ "succeeded" = "$state" ]; then
+                    break
+                fi
+                if [ "failed" = "$state" ]; then
                     break
                 fi
                 echo "workload isn't already now. Wait 10s..."
@@ -235,7 +238,8 @@ spec:
           - name: release-branch
       resource:
         action: create
-        successCondition: status.state = finish
+        successCondition: status.state = succeeded
+        failureCondition: status.state = failed
         manifest: |
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload
@@ -290,7 +294,8 @@ spec:
     - name: benching
       resource:
         action: create
-        successCondition: status.state = finish
+        successCondition: status.state = succeeded
+        failureCondition: status.state = failed
         manifest: |
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload

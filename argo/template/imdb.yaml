@@ -15,7 +15,8 @@ spec:
     - name: tipocket-imdb-importer
       resource:
         action: create
-        successCondition: status.state = finish
+        successCondition: status.state = succeeded
+        failureCondition: status.state = failed
         manifest: |
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload

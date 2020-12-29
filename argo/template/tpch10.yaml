@@ -11,18 +11,18 @@ spec:
         value: "q1,q2,q3,q4,q6,q7,q8,q9,q10,q11,q12,q13,q14,q15,q16,q17,q18,q19,q20,q21,q22"
       ######################################### current part
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
-        value: v4.0.8
+        value: nightly
       - name: tidb-url
-        value: "" #"http://fileserver.pingcap.net/download/builds/pingcap/tidb/507d535131c9e449ae02ab60374af123ac76b19b/centos7/tidb-server.tar.gz"
+        value: "http://fileserver.pingcap.net/download/builds/pingcap/tidb/507d535131c9e449ae02ab60374af123ac76b19b/centos7/tidb-server.tar.gz"
       - name: tikv-url
-        value: "" # "http://fileserver.pingcap.net/download/builds/pingcap/tikv/d71c78ef7c74b65e429ce24bd91389d06eb8ec0b/centos7/tikv-server.tar.gz"
+        value: "http://fileserver.pingcap.net/download/builds/pingcap/tikv/d71c78ef7c74b65e429ce24bd91389d06eb8ec0b/centos7/tikv-server.tar.gz"
       - name: pd-url
-        value: "" # "http://fileserver.pingcap.net/download/builds/pingcap/pd/fa65de5a11fe0b2e6a1783f5af4c7b6e81ddd271/centos7/pd-server.tar.gz"
+        value: "http://fileserver.pingcap.net/download/builds/pingcap/pd/fa65de5a11fe0b2e6a1783f5af4c7b6e81ddd271/centos7/pd-server.tar.gz"
       - name: toolset-tag                       # we use br to restore data, so you need fill in the toolset version
-        value: tidb-4.0 # tidb-5.0-rc                      # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
+        value: tidb-5.0-rc                      # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
       ######################################### baseline part
       - name: baseline-release
-        value: v4.0.8
+        value: v4.0.9
       - name: baseline-tidb-url                 # if need to patch baseline tidb binary version
         value: ""
       - name: baseline-tikv-url
@@ -117,7 +117,10 @@ spec:
                 if [ "running" = "$state" ]; then
                     break
                 fi
-                if [ "finish" = "$state" ]; then
+                if [ "succeeded" = "$state" ]; then
+                    break
+                fi
+                if [ "failed" = "$state" ]; then
                     break
                 fi
                 echo "workload isn't already now. Wait 10s..."
@@ -235,7 +238,8 @@ spec:
           - name: release-branch
       resource:
         action: create
-        successCondition: status.state = finish
+        successCondition: status.state = succeeded
+        failureCondition: status.state = failed
         manifest: |
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload
@@ -282,7 +286,8 @@ spec:
     - name: benching
       resource:
         action: create
-        successCondition: status.state = finish
+        successCondition: status.state = succeeded
+        failureCondition: status.state = failed
         manifest: |
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload
