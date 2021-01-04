@@ -1,36 +1,39 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: naglfar-tpch10-benching-
+  generateName: naglfar-imdb-benching-
 spec:
   entrypoint: starter
   onExit: delete-ns
   arguments:
     parameters:
-      - name: queries
-        value: "q1,q2,q3,q4,q6,q7,q8,q9,q10,q11,q12,q13,q14,q15,q16,q17,q18,q19,q20,q21,q22"
+      - name: queries # split to 4 parts
+#        value: "20a.sql 20b.sql 20c.sql 21a.sql 21b.sql 21c.sql 23a.sql 23b.sql 23c.sql 24a.sql 24b.sql 27a.sql 27b.sql 27c.sql 29a.sql 29b.sql 29c.sql"
+        value: "2a.sql 2b.sql 2c.sql 2d.sql 32a.sql 32b.sql 3a.sql 3b.sql 3c.sql"
+#        value: "10a.sql 11a.sql 11b.sql 11c.sql 15a.sql 15b.sql 15c.sql 15d.sql 16a.sql 16b.sql 16c.sql 16d.sql 17a.sql 17b.sql 17c.sql 17d.sql 17e.sql 17f.sql 19a.sql 19b.sql 19c.sql 19d.sql"
+#        value: "5a.sql 5b.sql 5c.sql 6a.sql 6b.sql 6c.sql 6d.sql 6e.sql 6f.sql 7a.sql 7b.sql 7c.sql 8a.sql 8b.sql 8c.sql 8d.sql 9a.sql 9b.sql 9c.sql 9d.sql"
       ######################################### current part
-      - name: release                           # release version: nightly, v3.0.x, v4.0.x
+      - name: release                           # release version: nightly
         value: nightly
       - name: tidb-url
-        value: "http://fileserver.pingcap.net/download/builds/pingcap/tidb/507d535131c9e449ae02ab60374af123ac76b19b/centos7/tidb-server.tar.gz"
+        value: "http://fileserver.pingcap.net/download/builds/pingcap/tidb/f99982b0c594c14ed3c92f62329e3dfd68e884d5/centos7/tidb-server.tar.gz"
       - name: tikv-url
         value: "http://fileserver.pingcap.net/download/builds/pingcap/tikv/d71c78ef7c74b65e429ce24bd91389d06eb8ec0b/centos7/tikv-server.tar.gz"
       - name: pd-url
-        value: "http://fileserver.pingcap.net/download/builds/pingcap/pd/fa65de5a11fe0b2e6a1783f5af4c7b6e81ddd271/centos7/pd-server.tar.gz"
+        value: "http://fileserver.pingcap.net/download/builds/pingcap/pd/8ff72c9eda8f358a4f9a5f8d7787dfb13511b5aa/centos7/pd-server.tar.gz"
       - name: toolset-tag                       # we use br to restore data, so you need fill in the toolset version
-        value: tidb-5.0-rc                      # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
+        value: tidb-5.0-rc                      # option: latest | tidb-5.0-rc . latest for master
       ######################################### baseline part
       - name: baseline-release
-        value: v4.0.9
+        value: nightly
       - name: baseline-tidb-url                 # if need to patch baseline tidb binary version
         value: ""
       - name: baseline-tikv-url
         value: ""
       - name: baseline-pd-url
         value: ""
-      - name: baseline-toolset-tag             # we use br to restore data, so you need fill in the toolset version
-        value: tidb-4.0 # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
+      - name: baseline-toolset-tag              # we use br to restore data, so you need fill in the toolset version
+        value: latest                           # option: latest | tidb-5.0-rc. latest for master
   templates:
     - name: starter
       steps:
@@ -82,11 +85,11 @@ spec:
           - name: importing-logs
             template: logs
             arguments:
-              parameters: [ { name: workload_name, value: "tpch10-importing" } ]
+              parameters: [ { name: workload_name, value: "imdb-importing" } ]
         - - name: importing-deletion
             template: workload-deletion
             arguments:
-              parameters: [ { name: workload_name, value: "tpch10-importing" } ]
+              parameters: [ { name: workload_name, value: "imdb-importing" } ]
     - name: benching-logs
       steps:
         - - name: benching
@@ -94,11 +97,11 @@ spec:
           - name: benching-logs
             template: logs
             arguments:
-              parameters: [ { name: workload_name, value: "tpch10-benching" } ]
+              parameters: [ { name: workload_name, value: "imdb-benching" } ]
         - - name: importing-deletion
             template: workload-deletion
             arguments:
-              parameters: [ { name: workload_name, value: "tpch10-benching" } ]
+              parameters: [ { name: workload_name, value: "imdb-benching" } ]
     - name: logs
       inputs:
         parameters:
@@ -143,11 +146,13 @@ spec:
             machines:
               - name: m1
                 exclusive: true
+              - name: m2
+                exclusive: true
             items:
               - name: tidb
                 spec:
-                  memory: 32GB
-                  cores: 16
+                  memory: 64GB
+                  cores: 32
                   machine: m1
               - name: pd
                 spec:
@@ -157,17 +162,17 @@ spec:
               - name: tikv-1
                 spec:
                   memory: 64GB
-                  cores: 16
+                  cores: 32
                   disks:
                     disk1:
                       kind: nvme
                       mountPath: /disk1
-                  machine: m1
+                  machine: m2
               - name: workload
                 spec:
                   memory: 8GB
                   cores: 4
-                  machine: m1
+                  machine: m2
     - name: create-cluster
       inputs:
         parameters:
@@ -244,14 +249,14 @@ spec:
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload
           metadata:
-            name: tpch10-importing
+            name: imdb-importing
             namespace: {{workflow.name}}
           spec:
             clusterTopologies:
               - name: tidb-cluster
                 aliasName: cluster
             workloads:
-              - name: tpch10-importing
+              - name: imdb-importing
                 dockerContainer:
                   resourceRequest:
                     name: tidb-cluster
@@ -268,16 +273,12 @@ spec:
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
                       pd=`echo $cluster_pd0 | awk -F ":" '{print $1}'`
                       release_branch="{{inputs.parameters.release-branch}}"
-                      if [[ ${release_branch:0:4} == "v3.0" ]]; then
-                        go-tpc -H $tidb -P4000 -D tpch10 tpch --sf=10 prepare
-                      elif [[ ${release_branch:0:4} == "v4.0" ]]; then
-                        br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10-release4.0 \
-                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
-                      elif [[ ${release_branch:0:4} == "v5.0" ]]; then
-                        br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10 \
+
+                      if [[ ${release_branch:0:4} == "v5.0" ]]; then
+                        br restore db --db=imdb --pd $pd:2379 --storage s3://benchmark/imdb \
                           --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch} == "nightly" ]]; then
-                        br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10 \
+                        br restore db --db=imdb --pd $pd:2379 --storage s3://benchmark/imdb \
                           --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
                       else
                         echo "illegal release_branch: $release_branch"
@@ -292,38 +293,37 @@ spec:
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload
           metadata:
-            name: tpch10-benching
+            name: imdb-benching
             namespace: {{workflow.name}}
           spec:
             clusterTopologies:
               - name: tidb-cluster
                 aliasName: cluster
             workloads:
-              - name: tpch10-benching
+              - name: imdb-benching
                 dockerContainer:
                   resourceRequest:
                     name: tidb-cluster
                     node: workload
-                  image: "hub.pingcap.net/mahjonp/bench-toolset:latest"
-                  imagePullPolicy: Always
+                  image: "hub.pingcap.net/mahjonp/bench-toolset"
+                  imagePullPolicy: IfNotPresent
                   command:
-                    - /bin/sh
+                    - /bin/bash
                     - -c
                     - |
                       set -ex
+                      curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/chaos-mesh/horoscope/master/install.sh | sh
+                      git clone https://github.com/chaos-mesh/horoscope.git
+                      cd horoscope/benchmark/job
+                      mv queries queries.back && mkdir queries
+
+                      sqls=( {{workflow.parameters.queries}} )
+                      for file in "${sqls[@]}"; do
+                        cp queries.back/$file queries/$file
+                      done
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
-                      # https://docs.pingcap.com/tidb/dev/v4.0-performance-benchmarking-with-tpch#variable-configuration-1
-                      mysql -h $tidb -P4000 -e '
-                          set global tidb_allow_batch_cop = 1;
-                          set global tidb_distsql_scan_concurrency = 30;
-                          set global tidb_projection_concurrency = 16;
-                          set global tidb_hashagg_partial_concurrency = 16;
-                          set global tidb_hashagg_final_concurrency = 16;
-                          set global tidb_hash_join_concurrency = 16;
-                          set global tidb_index_lookup_concurrency = 16;
-                          set global tidb_index_lookup_join_concurrency = 16;
-                      '
-                      go-tpc -H $tidb -P4000 -D tpch10 tpch --sf=10 --queries {{workflow.parameters.queries}} run --time 30m
+                      /root/.horo/bin/horo -d "root@tcp($tidb:4000)/imdb?multiStatements=true" -w . init
+                      /root/.horo/bin/horo bench --round 4
     - name: workload-deletion
       inputs:
         parameters:
