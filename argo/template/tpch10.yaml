@@ -10,6 +10,8 @@ spec:
       - name: queries
         value: "q1,q2,q3,q4,q6,q7,q8,q9,q10,q11,q12,q13,q14,q15,q16,q17,q18,q19,q20,q21,q22"
       ######################################### current part
+      - name: use-explain                       # show explain analyze info?
+        value: false
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
         value: nightly
       - name: tidb-url
@@ -323,7 +325,7 @@ spec:
                           set global tidb_index_lookup_concurrency = 16;
                           set global tidb_index_lookup_join_concurrency = 16;
                       '
-                      go-tpc -H $tidb -P4000 -D tpch10 tpch --use-explain --sf=10 --queries {{workflow.parameters.queries}} run --time 30m
+                      go-tpc -H $tidb -P4000 -D tpch10 tpch --use-explain={{workflow.parameters.use-explain}} --sf=10 --queries {{workflow.parameters.queries}} run --time 30m
     - name: workload-deletion
       inputs:
         parameters:
