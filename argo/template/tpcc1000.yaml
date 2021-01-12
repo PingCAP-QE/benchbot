@@ -1,51 +1,341 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: naglfar-tpcc1000-importer-
+  generateName: naglfar-tpcc1000-benching
 spec:
-  entrypoint: tipocket-tpcc1000-importer
+  entrypoint: starter
+  onExit: delete-ns
   arguments:
     parameters:
-      - name: namespace # namespace
-      - name: tag       # tag(different version uses different BRs), fill in: latest,tidb-4.0
-      - name: test_cluster_name # cluster name import to
-      - name: resource_request  # resource request name
-      - name: workload_name     # workload node name
+      - name: release                           # release version: nightly, v3.0.x, v4.0.x
+        value: nightly
+      - name: tidb-url
+        value: "http://fileserver.pingcap.net/download/builds/pingcap/tidb/acea4428143c1bd82db6189e7f9ad5e7071c9182/centos7/tidb-server.tar.gz"
+      - name: tikv-url
+        value: "http://fileserver.pingcap.net/download/builds/pingcap/tikv/408f6ab319e83b10de60165530394ea1f85f50bb/centos7/tikv-server.tar.gz"
+      - name: pd-url
+        value: "http://fileserver.pingcap.net/download/builds/pingcap/pd/9efcf3a0860ab3988d9b0b53987819bedcc3a07f/centos7/pd-server.tar.gz"
+      - name: toolset-tag                       # we use br to restore data, so you need fill in the toolset version
+        value: tidb-5.0-rc                      # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
+      ######################################### baseline part
+      - name: baseline-release
+        value: v4.0.9
+      - name: baseline-tidb-url                 # if need to patch baseline tidb binary version
+        value: ""
+      - name: baseline-tikv-url
+        value: ""
+      - name: baseline-pd-url
+        value: ""
+      - name: baseline-toolset-tag             # we use br to restore data, so you need fill in the toolset version
+        value: tidb-4.0 # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
   templates:
-    - name: tipocket-tpcc1000-importer
+    - name: starter
+      steps:
+        - - name: create-ns
+            template: create-ns
+        - - name: request-cluster
+            template: request-cluster
+        - - name: create-cluster
+            template: create-cluster
+            arguments:
+              parameters: [ { name: release-branch, value: "{{workflow.parameters.release}}" },
+                            { name: tidb-url, value: "{{workflow.parameters.tidb-url}}" },
+                            { name: tikv-url, value: "{{workflow.parameters.tikv-url}}" },
+                            { name: pd-url, value: "{{workflow.parameters.pd-url}}" } ]
+        - - name: importer-logs-1
+            template: importer-logs
+            arguments:
+              parameters: [ { name: toolset-tag,   value: "{{workflow.parameters.toolset-tag}}" },
+                            { name: release-branch, value: "{{workflow.parameters.release}}" } ]
+        - - name: benching-logs-1
+            template: benching-logs
+        - - name: uninstall-cluster
+            template: uninstall-cluster
+        - - name: create-cluster-baseline
+            template: create-cluster
+            arguments:
+              parameters: [ { name: release-branch, value: "{{workflow.parameters.baseline-release}}" },
+                            { name: tidb-url, value: "{{workflow.parameters.baseline-tidb-url}}" },
+                            { name: tikv-url, value: "{{workflow.parameters.baseline-tikv-url}}" },
+                            { name: pd-url, value: "{{workflow.parameters.baseline-pd-url}}" } ]
+        - - name: importer-logs-2
+            template: importer-logs
+            arguments:
+              parameters: [ { name: toolset-tag,   value: "{{workflow.parameters.baseline-toolset-tag}}" },
+                            { name: release-branch, value: "{{workflow.parameters.baseline-release}}" } ]
+        - - name: benching-logs-2
+            template: benching-logs
+    - name: importer-logs
+      inputs:
+        parameters:
+          - name: toolset-tag
+          - name: release-branch
+      steps:
+        - - name: importing
+            template: importing
+            arguments:
+              parameters: [ { name: toolset-tag,    value: "{{inputs.parameters.toolset-tag}}" },
+                            { name: release-branch, value: "{{inputs.parameters.release-branch}}" }]
+          - name: importing-logs
+            template: logs
+            arguments:
+              parameters: [ { name: workload_name, value: "tpcc1000-importing" } ]
+        - - name: importing-deletion
+            template: workload-deletion
+            arguments:
+              parameters: [ { name: workload_name, value: "tpcc1000-importing" } ]
+    - name: benching-logs
+      steps:
+        - - name: benching
+            template: benching
+          - name: benching-logs
+            template: logs
+            arguments:
+              parameters: [ { name: workload_name, value: "tpcc1000-benching" } ]
+        - - name: importing-deletion
+            template: workload-deletion
+            arguments:
+              parameters: [ { name: workload_name, value: "tpcc1000-benching" } ]
+    - name: logs
+      inputs:
+        parameters:
+          - name: workload_name
+      container:
+        name: logs
+        image: 'argoproj/argoexec:latest'
+        imagePullPolicy: IfNotPresent
+        command:
+          - sh
+          - '-c'
+          - |
+            while true
+            do
+                state=`kubectl get tw {{inputs.parameters.workload_name}} -n {{workflow.name}} -ojsonpath='{.status.state}' || echo pending`
+                if [ "running" = "$state" ]; then
+                    break
+                fi
+                if [ "succeeded" = "$state" ]; then
+                    break
+                fi
+                if [ "failed" = "$state" ]; then
+                    break
+                fi
+                echo "workload isn't already now. Wait 10s..."
+                sleep 10
+            done
+            curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/PingCAP-QE/Naglfar/master/scripts/kubectl-naglfar-installer.sh | sh
+            export PATH=$PATH:/root/.Naglfar/bin
+            naglfar logs {{inputs.parameters.workload_name}} -n {{workflow.name}} --follow
+    - name: request-cluster
       resource:
         action: create
-        successCondition: status.state = finish
+        successCondition: status.state = ready
+        manifest: |
+          apiVersion: naglfar.pingcap.com/v1
+          kind: TestResourceRequest
+          metadata:
+            name: tidb-cluster
+            namespace: {{workflow.name}}
+          spec:
+            machines:
+              - name: m1
+                exclusive: true
+            items:
+              - name: tidb
+                spec:
+                  memory: 32GB
+                  cores: 16
+                  machine: m1
+              - name: pd
+                spec:
+                  memory: 8GB
+                  cores: 2
+                  machine: m1
+              - name: tikv-1
+                spec:
+                  memory: 64GB
+                  cores: 16
+                  disks:
+                    disk1:
+                      kind: nvme
+                      mountPath: /disk1
+                  machine: m1
+              - name: workload
+                spec:
+                  memory: 8GB
+                  cores: 4
+                  machine: m1
+    - name: create-cluster
+      inputs:
+        parameters:
+          - name: release-branch
+          - name: tidb-url
+          - name: tikv-url
+          - name: pd-url
+      resource:
+        action: create
+        successCondition: status.state = ready
+        manifest: |
+          apiVersion: naglfar.pingcap.com/v1
+          kind: TestClusterTopology
+          metadata:
+            name: tidb-cluster
+            namespace: {{workflow.name}}
+          spec:
+            resourceRequest: tidb-cluster
+            tidbCluster:
+              serverConfigs:
+                tidb: |-
+                tikv: |-
+                  #rocksdb.defaultcf.block-cache-size: "16GB"
+                  #rocksdb.writecf.block-cache-size: "9GB"
+                  #rocksdb.lockcf.block-cache-size: "1GB"
+                pd: |-
+              version:
+                version: {{inputs.parameters.release-branch}}
+                tidbDownloadURL: {{inputs.parameters.tidb-url}}
+                tikvDownloadURL: {{inputs.parameters.tikv-url}}
+                pdDownloadURL: {{inputs.parameters.pd-url}}
+              control: tidb
+              tikv:
+                - host: tikv-1
+                  port: 20160
+                  statusPort: 20180
+                  deployDir: /disk1/deploy/tikv-20160
+                  dataDir: /disk1/data/tikv-20160
+                  logDir: /disk1/deploy/tikv-20160/log
+              tidb:
+                - host: tidb
+                  deployDir: /disk1/deploy/tidb-4000
+              pd:
+                - host: pd
+                  deployDir: /disk1/deploy/pd-2379
+                  dataDir: /disk1/data/pd-2379
+                  logDir: /disk1/deploy/pd-2379/log
+              monitor:
+                - host: tidb
+                  deployDir: /disk1/deploy/prometheus-8249
+                  dataDir: /disk1/deploy/prometheus-8249/data
+              grafana:
+                - host: tidb
+                  deployDir: /disk1/deploy/grafana-3000
+    - name: uninstall-cluster
+      resource:
+        action: delete
+        manifest: |
+          apiVersion: naglfar.pingcap.com/v1
+          kind: TestClusterTopology
+          metadata:
+            name: tidb-cluster
+            namespace: {{workflow.name}}
+    - name: importing
+      inputs:
+        parameters:
+          - name: toolset-tag
+          - name: release-branch
+      resource:
+        action: create
+        successCondition: status.state = succeeded
+        failureCondition: status.state = failed
         manifest: |
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload
           metadata:
-            name: tpcc1000-importer
-            namespace: {{workflow.parameters.namespace}}
+            name: tpcc1000-importing
+            namespace: {{workflow.name}}
           spec:
             clusterTopologies:
-              - name: {{workflow.parameters.test_cluster_name}}
+              - name: tidb-cluster
                 aliasName: cluster
             workloads:
-              - name: tpcc1000-importer
+              - name: tpcc1000-importing
                 dockerContainer:
                   resourceRequest:
-                    name: {{workflow.parameters.resource_request}}
-                    node: {{workflow.parameters.workload_name}}
-                  image: "hub.pingcap.net/mahjonp/bench-toolset:{{workflow.parameters.tag}}"
+                    name: tidb-cluster
+                    node: workload
+                  image: "hub.pingcap.net/mahjonp/bench-toolset:{{inputs.parameters.toolset-tag}}"
+                  imagePullPolicy: IfNotPresent
+                  command:
+                    - /bin/bash
+                    - -c
+                    - |
+                      #!/bin/bash
+                      set -ex
+                      export AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin
+                      tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
+                      pd=`echo $cluster_pd0 | awk -F ":" '{print $1}'`
+                      release_branch="{{inputs.parameters.release-branch}}"
+                      if [[ ${release_branch:0:4} == "v3.0" ]]; then
+                        go-tpc -H $tidb -P4000 -D tpcc tpcc --warehouses 1000 prepare
+                      elif [[ ${release_branch:0:4} == "v4.0" ]]; then
+                        br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-4.0 \
+                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                      elif [[ ${release_branch:0:4} == "v5.0" ]]; then
+                        br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-new \
+                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                      elif [[ ${release_branch} == "nightly" ]]; then
+                        br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-new \
+                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                      else
+                        echo "illegal release_branch: $release_branch"
+                        exit 1
+                      fi
+    - name: benching
+      resource:
+        action: create
+        successCondition: status.state = succeeded
+        failureCondition: status.state = failed
+        manifest: |
+          apiVersion: naglfar.pingcap.com/v1
+          kind: TestWorkload
+          metadata:
+            name: tpcc1000-benching
+            namespace: {{workflow.name}}
+          spec:
+            clusterTopologies:
+              - name: tidb-cluster
+                aliasName: cluster
+            workloads:
+              - name: tpcc1000-benching
+                dockerContainer:
+                  resourceRequest:
+                    name: tidb-cluster
+                    node: workload
+                  image: "hub.pingcap.net/mahjonp/go-tpc"
                   imagePullPolicy: Always
                   command:
                     - /bin/sh
                     - -c
                     - |
                       set -ex
-                      export AWS_ACCESS_KEY_ID=YOURACCESSKEY AWS_SECRET_ACCESS_KEY=YOURSECRETKEY
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
-                      path="s3://mybucket/tpcc-1000-new"
-                      if [ "{{workflow.parameters.tag}}" = "tidb-4.0" ]; then
-                        path="s3://mybucket/tpcc-1000-4.0"
-                      fi
-                      br restore db --db "tpcc" --pd=$cluster_pd0 \
-                              --storage=$path \
-                              --s3.endpoint=http://172.16.4.4:30812 \
-                              --send-credentials-to-tikv=true
+                      /go-tpc -H $tidb -P4000 -D tpcc tpcc run --time 10m
+    - name: workload-deletion
+      inputs:
+        parameters:
+          - name: workload_name
+      resource:
+        action: delete
+        manifest: |
+          apiVersion: naglfar.pingcap.com/v1
+          kind: TestWorkload
+          metadata:
+            name: {{inputs.parameters.workload_name}}
+            namespace: {{workflow.name}}
+    - name: create-ns
+      resource:
+        action: create
+        successCondition: status.phase = Active
+        manifest: |
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: {{workflow.name}}
+    - name: delete-ns
+      resource:
+        action: delete
+        manifest: |
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: {{workflow.name}}
