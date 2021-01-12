@@ -1,12 +1,14 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: naglfar-tpcc1000-benching-
+  generateName: naglfar-ycsb-100m-benching-
 spec:
   entrypoint: starter
   onExit: delete-ns
   arguments:
     parameters:
+      - name: workload
+        value: "workloada"                      # workloada workloadb workloadc workloadd workloade
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
         value: nightly
       - name: tidb-url
@@ -79,11 +81,11 @@ spec:
           - name: importing-logs
             template: logs
             arguments:
-              parameters: [ { name: workload_name, value: "tpcc1000-importing" } ]
+              parameters: [ { name: workload_name, value: "ycsb-100m-importing" } ]
         - - name: importing-deletion
             template: workload-deletion
             arguments:
-              parameters: [ { name: workload_name, value: "tpcc1000-importing" } ]
+              parameters: [ { name: workload_name, value: "ycsb-100m-importing" } ]
     - name: benching-logs
       steps:
         - - name: benching
@@ -91,11 +93,11 @@ spec:
           - name: benching-logs
             template: logs
             arguments:
-              parameters: [ { name: workload_name, value: "tpcc1000-benching" } ]
+              parameters: [ { name: workload_name, value: "ycsb-100m-benching" } ]
         - - name: importing-deletion
             template: workload-deletion
             arguments:
-              parameters: [ { name: workload_name, value: "tpcc1000-benching" } ]
+              parameters: [ { name: workload_name, value: "ycsb-100m-benching" } ]
     - name: logs
       inputs:
         parameters:
@@ -241,14 +243,14 @@ spec:
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload
           metadata:
-            name: tpcc1000-importing
+            name: ycsb-100m-importing
             namespace: {{workflow.name}}
           spec:
             clusterTopologies:
               - name: tidb-cluster
                 aliasName: cluster
             workloads:
-              - name: tpcc1000-importing
+              - name: ycsb-100m-importing
                 dockerContainer:
                   resourceRequest:
                     name: tidb-cluster
@@ -265,16 +267,14 @@ spec:
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
                       pd=`echo $cluster_pd0 | awk -F ":" '{print $1}'`
                       release_branch="{{inputs.parameters.release-branch}}"
-                      if [[ ${release_branch:0:4} == "v3.0" ]]; then
-                        go-tpc -H $tidb -P4000 -D tpcc tpcc --warehouses 1000 prepare
-                      elif [[ ${release_branch:0:4} == "v4.0" ]]; then
-                        br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-4.0 \
+                      if [[ ${release_branch:0:4} == "v4.0" ]]; then
+                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m-release4.0 \
                           --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch:0:4} == "v5.0" ]]; then
-                        br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-new \
+                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m \
                           --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch} == "nightly" ]]; then
-                        br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-new \
+                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m \
                           --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
                       else
                         echo "illegal release_branch: $release_branch"
@@ -289,27 +289,42 @@ spec:
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload
           metadata:
-            name: tpcc1000-benching
+            name: ycsb-100m-benching
             namespace: {{workflow.name}}
           spec:
             clusterTopologies:
               - name: tidb-cluster
                 aliasName: cluster
             workloads:
-              - name: tpcc1000-benching
+              - name: ycsb-100m-benching
                 dockerContainer:
                   resourceRequest:
                     name: tidb-cluster
                     node: workload
-                  image: "hub.pingcap.net/mahjonp/go-tpc"
+                  image: "hub.pingcap.net/mahjonp/bench-toolset:latest"
                   imagePullPolicy: Always
                   command:
                     - /bin/sh
                     - -c
                     - |
                       set -ex
+                      export AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
-                      /go-tpc -H $tidb -P4000 -D tpcc tpcc run --time 10m
+                      pd=`echo $cluster_pd0 | awk -F ":" '{print $1}'`
+
+                      echo "recordcount=100000000" >> global.conf
+                      echo "operationcount=10000000" >> global.conf
+                      echo "workload=core" >> global.conf
+                      echo "fieldcount=10" >> global.conf
+                      echo "fieldlength=100" >> global.conf
+                      echo "threadcount=500" >> global.conf
+                      echo "requestdistribution=zipfian" >> global.conf
+
+                      go-ycsb run mysql \
+                          -P /ycsb/workloads/{{workflow.parameters.workload}} \
+                          -P global.conf \
+                          -p mysql.host=$tidb \
+                          -p mysql.port=4000
     - name: workload-deletion
       inputs:
         parameters:
