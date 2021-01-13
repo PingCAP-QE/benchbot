@@ -309,7 +309,7 @@ spec:
                     - |
                       set -ex
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
-                      /go-tpc -H $tidb -P4000 -D tpcc tpcc run --time 10m
+                      /go-tpc -H $tidb -P4000 -D tpcc tpcc run --time 60m --threads 256
     - name: workload-deletion
       inputs:
         parameters:
