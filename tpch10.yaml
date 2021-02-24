@@ -192,9 +192,9 @@ spec:
               serverConfigs:
                 tidb: |-
                 tikv: |-
-                  #rocksdb.defaultcf.block-cache-size: "16GB"
-                  #rocksdb.writecf.block-cache-size: "9GB"
-                  #rocksdb.lockcf.block-cache-size: "1GB"
+                  rocksdb.defaultcf.block-cache-size: "16GB"
+                  rocksdb.writecf.block-cache-size: "9GB"
+                  rocksdb.lockcf.block-cache-size: "1GB"
                 pd: |-
               version:
                 version: {{inputs.parameters.release-branch}}
@@ -274,13 +274,13 @@ spec:
                         go-tpc -H $tidb -P4000 -D tpch10 tpch --sf=10 prepare
                       elif [[ ${release_branch:0:4} == "v4.0" ]]; then
                         br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10-release4.0 \
-                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                          --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch:0:4} == "v5.0" ]]; then
                         br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10 \
-                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                          --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch} == "nightly" ]]; then
                         br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10 \
-                          --s3.endpoint http://172.16.5.109:9000 --send-credentials-to-tikv=true
+                          --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       else
                         echo "illegal release_branch: $release_branch"
                         exit 1
