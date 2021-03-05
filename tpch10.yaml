@@ -15,16 +15,16 @@ spec:
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
         value: nightly
       - name: tidb-url
-        value: "http://fileserver.pingcap.net/download/builds/pingcap/tidb/39c55ddbfef94b586de1d950d1b946db2e7b2f55/centos7/tidb-server.tar.gz"
+        value: ""
       - name: tikv-url
-        value: "http://fileserver.pingcap.net/download/builds/pingcap/tikv/93fe5350f5f2d95ee5a462038c4200e05904886c/centos7/tikv-server.tar.gz"
+        value: ""
       - name: pd-url
-        value: "http://fileserver.pingcap.net/download/builds/pingcap/pd/27c29b778ad3d4994c115ff731fdc32e139fd73b/centos7/pd-server.tar.gz"
+        value: ""
       - name: toolset-tag                       # we use br to restore data, so you need fill in the toolset version
-        value: tidb-5.0-rc                      # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
+        value: nightly                          # option: nightly | v5.0-rc-nightly | release-4.0-nightly
       ######################################### baseline part
       - name: baseline-release
-        value: v4.0.9
+        value: nightly
       - name: baseline-tidb-url                 # if need to patch baseline tidb binary version
         value: ""
       - name: baseline-tikv-url
@@ -32,7 +32,7 @@ spec:
       - name: baseline-pd-url
         value: ""
       - name: baseline-toolset-tag             # we use br to restore data, so you need fill in the toolset version
-        value: tidb-4.0 # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
+        value: nightly                         # option: nightly | v5.0-rc-nightly | release-4.0-nightly
   templates:
     - name: starter
       steps:
@@ -258,7 +258,7 @@ spec:
                   resourceRequest:
                     name: tidb-cluster
                     node: workload
-                  image: "hub.pingcap.net/mahjonp/bench-toolset:{{inputs.parameters.toolset-tag}}"
+                  image: "docker.io/pingcap/br:{{inputs.parameters.toolset-tag}}"
                   imagePullPolicy: IfNotPresent
                   command:
                     - /bin/bash

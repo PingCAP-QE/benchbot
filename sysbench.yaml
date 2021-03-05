@@ -8,18 +8,18 @@ spec:
   arguments:
     parameters:
       - name: oltp_method
-        value: oltp_point_select                # oltp_insert, oltp_update_index, oltp_update_non_index, oltp_read_only, oltp_read_write, oltp_write_only
+        value: oltp_write_only                # oltp_insert, oltp_update_index, oltp_update_non_index, oltp_read_only, oltp_read_write, oltp_write_only
       ######################################### current part
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
-        value: nightly
+        value: v4.0.10
       - name: tidb-url
-        value: "http://fileserver.pingcap.net/download/builds/pingcap/tidb/507d535131c9e449ae02ab60374af123ac76b19b/centos7/tidb-server.tar.gz"
+        value: ""
       - name: tikv-url
-        value: "http://fileserver.pingcap.net/download/builds/pingcap/tikv/d71c78ef7c74b65e429ce24bd91389d06eb8ec0b/centos7/tikv-server.tar.gz"
+        value: ""
       - name: pd-url
-        value: "http://fileserver.pingcap.net/download/builds/pingcap/pd/fa65de5a11fe0b2e6a1783f5af4c7b6e81ddd271/centos7/pd-server.tar.gz"
+        value: ""
       - name: toolset-tag                       # we use br to restore data, so you need fill in the toolset version
-        value: tidb-5.0-rc                      # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
+        value: release-4.0-nightly              # option: nightly | v5.0-rc-nightly | release-4.0-nightly
       ######################################### baseline part
       - name: baseline-release
         value: nightly
@@ -30,7 +30,7 @@ spec:
       - name: baseline-pd-url
         value: ""
       - name: baseline-toolset-tag             # we use br to restore data, so you need fill in the toolset version
-        value: latest                          # option: latest | tidb-5.0-rc | tidb-4.0 | tidb-3.0  . latest for master, tidb-4.0 for release-4.0
+        value: nightly                         # option: nightly | v5.0-rc-nightly | release-4.0-nightly
   templates:
     - name: starter
       steps:
@@ -256,7 +256,7 @@ spec:
                   resourceRequest:
                     name: tidb-cluster
                     node: workload
-                  image: "hub.pingcap.net/mahjonp/bench-toolset:{{inputs.parameters.toolset-tag}}"
+                  image: "docker.io/pingcap/br:{{inputs.parameters.toolset-tag}}"
                   imagePullPolicy: IfNotPresent
                   command:
                     - /bin/bash
