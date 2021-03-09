@@ -279,13 +279,13 @@ spec:
                                     --mysql-db=test \
                                     --threads=10
                       elif [[ ${release_branch:0:4} == "v4.0" ]]; then
-                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/sysbench-32-10000000-release4.0 \
+                        /br restore db --db=test --pd $pd:2379 --storage s3://benchmark/sysbench-32-10000000-release4.0 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch:0:4} == "v5.0" ]]; then
-                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/sysbench-32-10000000 \
+                        /br restore db --db=test --pd $pd:2379 --storage s3://benchmark/sysbench-32-10000000 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch} == "nightly" ]]; then
-                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/sysbench-32-10000000 \
+                        /br restore db --db=test --pd $pd:2379 --storage s3://benchmark/sysbench-32-10000000 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       else
                         echo "illegal release_branch: $release_branch"

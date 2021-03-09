@@ -254,7 +254,7 @@ spec:
                     name: tidb-cluster
                     node: workload
                   image: "docker.io/pingcap/br:{{inputs.parameters.toolset-tag}}"
-                  imagePullPolicy: IfNotPresent
+                  imagePullPolicy: Always
                   command:
                     - /bin/bash
                     - -c
@@ -268,13 +268,13 @@ spec:
                       if [[ ${release_branch:0:4} == "v3.0" ]]; then
                         go-tpc -H $tidb -P4000 -D tpcc tpcc --warehouses 1000 prepare
                       elif [[ ${release_branch:0:4} == "v4.0" ]]; then
-                        br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-4.0 \
+                        /br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-4.0 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch:0:4} == "v5.0" ]]; then
-                        br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-new \
+                        /br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-new \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch} == "nightly" ]]; then
-                        br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-new \
+                        /br restore db --db=tpcc --pd $pd:2379 --storage s3://benchmark/tpcc-1000-new \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       else
                         echo "illegal release_branch: $release_branch"

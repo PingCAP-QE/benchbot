@@ -256,7 +256,7 @@ spec:
                     name: tidb-cluster
                     node: workload
                   image: "docker.io/pingcap/br:{{inputs.parameters.toolset-tag}}"
-                  imagePullPolicy: IfNotPresent
+                  imagePullPolicy: Always
                   command:
                     - /bin/bash
                     - -c
@@ -268,13 +268,13 @@ spec:
                       pd=`echo $cluster_pd0 | awk -F ":" '{print $1}'`
                       release_branch="{{inputs.parameters.release-branch}}"
                       if [[ ${release_branch:0:4} == "v4.0" ]]; then
-                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m-release4.0 \
+                        /br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m-release4.0 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch:0:4} == "v5.0" ]]; then
-                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m \
+                        /br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch} == "nightly" ]]; then
-                        br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m \
+                        /br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       else
                         echo "illegal release_branch: $release_branch"
