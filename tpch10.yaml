@@ -15,7 +15,7 @@ spec:
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
         value: nightly
       - name: tidb-url
-        value: "http://fileserver.pingcap.net/download/builds/pingcap/tidb/pr/8995989e96c1123c9d8f7e6358feff1bcd5de56f/centos7/tidb-server.tar.gz"
+        value: "" # http://fileserver.pingcap.net/download/builds/pingcap/tidb/pr/8995989e96c1123c9d8f7e6358feff1bcd5de56f/centos7/tidb-server.tar.gz
       - name: tikv-url
         value: ""
       - name: pd-url
@@ -26,7 +26,7 @@ spec:
       - name: baseline-release
         value: nightly
       - name: baseline-tidb-url                 # if need to patch baseline tidb binary version
-        value: "http://fileserver.pingcap.net/download/builds/pingcap/tidb/7c552f52fabeff0c4aad33e69a8193cd94ecd9c5/centos7/tidb-server.tar.gz"
+        value: "" # http://fileserver.pingcap.net/download/builds/pingcap/tidb/7c552f52fabeff0c4aad33e69a8193cd94ecd9c5/centos7/tidb-server.tar.gz
       - name: baseline-tikv-url
         value: ""
       - name: baseline-pd-url
@@ -270,7 +270,6 @@ spec:
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
                       pd=`echo $cluster_pd0 | awk -F ":" '{print $1}'`
                       release_branch="{{inputs.parameters.release-branch}}"
-                      mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
                       if [[ ${release_branch:0:4} == "v3.0" ]]; then
                         go-tpc -H $tidb -P4000 -D tpch10 tpch --sf=10 prepare
                       elif [[ ${release_branch:0:4} == "v4.0" ]]; then
