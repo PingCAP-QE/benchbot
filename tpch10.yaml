@@ -15,18 +15,18 @@ spec:
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
         value: nightly
       - name: tidb-url
-        value: "" # http://fileserver.pingcap.net/download/builds/pingcap/tidb/pr/8995989e96c1123c9d8f7e6358feff1bcd5de56f/centos7/tidb-server.tar.gz
+        value: "" # http://fileserver.pingcap.net/download/builds/pingcap/tidb/abbf3fe8e638b19443dffa59976555a73c46bbae/centos7/tidb-server.tar.gz
       - name: tikv-url
-        value: ""
+        value: "" # http://fileserver.pingcap.net/download/builds/pingcap/tikv/028e4c5b35245c84c4ea11ad89720d7fba33fd17/centos7/tikv-server.tar.gz"
       - name: pd-url
-        value: ""
+        value: "" # http://fileserver.pingcap.net/download/builds/pingcap/pd/0e15869c568d0a6db7d2d674cebe7dd9d316985f/centos7/pd-server.tar.gz"
       - name: toolset-tag                       # we use br to restore data, so you need fill in the toolset version
         value: nightly                          # option: nightly | v5.0-rc-nightly | release-4.0-nightly
       ######################################### baseline part
       - name: baseline-release
         value: nightly
       - name: baseline-tidb-url                 # if need to patch baseline tidb binary version
-        value: "" # http://fileserver.pingcap.net/download/builds/pingcap/tidb/7c552f52fabeff0c4aad33e69a8193cd94ecd9c5/centos7/tidb-server.tar.gz
+        value: ""
       - name: baseline-tikv-url
         value: ""
       - name: baseline-pd-url
@@ -191,6 +191,10 @@ spec:
             tidbCluster:
               serverConfigs:
                 tidb: |-
+                  mem-quota-query: 34359738368
+                  tikv-client.copr-cache.capacity-mb: 0.0
+                  tikv-client.copr-cache.enable: false
+                  enable-batch-dml: {}
                 tikv: |-
                   rocksdb.defaultcf.block-cache-size: "16GB"
                   rocksdb.writecf.block-cache-size: "9GB"
