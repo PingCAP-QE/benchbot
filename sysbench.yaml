@@ -8,7 +8,7 @@ spec:
   arguments:
     parameters:
       - name: oltp_method
-        value: oltp_write_only                # oltp_insert, oltp_update_index, oltp_update_non_index, oltp_read_only, oltp_read_write, oltp_write_only
+        value: oltp_write_only                # oltp_point_select, oltp_insert, oltp_update_index, oltp_update_non_index, oltp_read_only, oltp_read_write, oltp_write_only
       ######################################### current part
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
         value: v4.0.10
