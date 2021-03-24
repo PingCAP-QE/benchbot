@@ -189,7 +189,6 @@ spec:
           spec:
             resourceRequest: tidb-cluster
             tidbCluster:
-              tiupMirror: http://staging.tiup-server.pingcap.net
               serverConfigs:
                 tidb: |-
                   mem-quota-query: 34359738368
