@@ -186,6 +186,7 @@ spec:
           spec:
             resourceRequest: tidb-cluster
             tidbCluster:
+              tiupMirror: http://172.16.4.61:31988
               serverConfigs:
                 tidb: |-
                 tikv: |-
