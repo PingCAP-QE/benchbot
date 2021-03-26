@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: naglfar-tpch10-benching-
+  generateName: naglfar-tpch50-benching-
 spec:
   entrypoint: starter
   onExit: delete-ns
@@ -84,11 +84,11 @@ spec:
           - name: importing-logs
             template: logs
             arguments:
-              parameters: [ { name: workload_name, value: "tpch10-importing" } ]
+              parameters: [ { name: workload_name, value: "tpch50-importing" } ]
         - - name: importing-deletion
             template: workload-deletion
             arguments:
-              parameters: [ { name: workload_name, value: "tpch10-importing" } ]
+              parameters: [ { name: workload_name, value: "tpch50-importing" } ]
     - name: benching-logs
       steps:
         - - name: benching
@@ -96,11 +96,11 @@ spec:
           - name: benching-logs
             template: logs
             arguments:
-              parameters: [ { name: workload_name, value: "tpch10-benching" } ]
+              parameters: [ { name: workload_name, value: "tpch50-benching" } ]
         - - name: importing-deletion
             template: workload-deletion
             arguments:
-              parameters: [ { name: workload_name, value: "tpch10-benching" } ]
+              parameters: [ { name: workload_name, value: "tpch50-benching" } ]
     - name: logs
       inputs:
         parameters:
@@ -249,14 +249,14 @@ spec:
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload
           metadata:
-            name: tpch10-importing
+            name: tpch50-importing
             namespace: {{workflow.name}}
           spec:
             clusterTopologies:
               - name: tidb-cluster
                 aliasName: cluster
             workloads:
-              - name: tpch10-importing
+              - name: tpch50-importing
                 dockerContainer:
                   resourceRequest:
                     name: tidb-cluster
@@ -274,15 +274,15 @@ spec:
                       pd=`echo $cluster_pd0 | awk -F ":" '{print $1}'`
                       release_branch="{{inputs.parameters.release-branch}}"
                       if [[ ${release_branch:0:4} == "v3.0" ]]; then
-                        go-tpc -H $tidb -P4000 -D tpch10 tpch --sf=10 prepare
+                        go-tpc -H $tidb -P4000 -D tpch50 tpch --sf=50 prepare
                       elif [[ ${release_branch:0:4} == "v4.0" ]]; then
-                        /br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10-release4.0 \
+                        /br restore db --db=tpch50 --pd $pd:2379 --storage s3://benchmark/tpch50-release4.0 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch:0:4} == "v5.0" ]]; then
-                        /br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10 \
+                        /br restore db --db=tpch50 --pd $pd:2379 --storage s3://benchmark/tpch50 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch} == "nightly" ]]; then
-                        /br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10 \
+                        /br restore db --db=tpch50 --pd $pd:2379 --storage s3://benchmark/tpch50 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       else
                         echo "illegal release_branch: $release_branch"
@@ -297,14 +297,14 @@ spec:
           apiVersion: naglfar.pingcap.com/v1
           kind: TestWorkload
           metadata:
-            name: tpch10-benching
+            name: tpch50-benching
             namespace: {{workflow.name}}
           spec:
             clusterTopologies:
               - name: tidb-cluster
                 aliasName: cluster
             workloads:
-              - name: tpch10-benching
+              - name: tpch50-benching
                 dockerContainer:
                   resourceRequest:
                     name: tidb-cluster
@@ -328,7 +328,7 @@ spec:
                           set global tidb_index_lookup_concurrency = 16;
                           set global tidb_index_lookup_join_concurrency = 16;
                       '
-                      go-tpc -H $tidb -P4000 -D tpch10 tpch --use-explain={{workflow.parameters.use-explain}} --sf=10 --queries {{workflow.parameters.queries}} run --time 30m
+                      go-tpc -H $tidb -P4000 -D tpch50 tpch --use-explain={{workflow.parameters.use-explain}} --sf=50 --queries {{workflow.parameters.queries}} run --time 30m
     - name: workload-deletion
       inputs:
         parameters:
