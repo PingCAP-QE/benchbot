@@ -122,6 +122,10 @@ spec:
                 fi
                 echo "workload isn't already now. Wait 10s..."
                 sleep 10
+                i=$((i+1))
+                if [ $i -eq 60 ]; then
+                  exit 1
+                fi
             done
             curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/PingCAP-QE/Naglfar/master/scripts/kubectl-naglfar-installer.sh | sh
             export PATH=$PATH:/root/.Naglfar/bin
@@ -172,6 +176,7 @@ spec:
           - name: tidb-url
           - name: tikv-url
           - name: pd-url
+      activeDeadlineSeconds: 360
       resource:
         action: create
         successCondition: status.state = ready
