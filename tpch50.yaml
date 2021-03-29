@@ -333,6 +333,7 @@ spec:
                           set global tidb_index_lookup_concurrency = 16;
                           set global tidb_index_lookup_join_concurrency = 16;
                       '
+                      mysql -h $tidb -P4000 -D tpch50 -e 'analyze table lineitem; analyze table orders; analyze table part; analyze table partsupp; analyze table supplier; analyze table customer; analyze table region; analyze table nation;'
                       go-tpc -H $tidb -P4000 -D tpch50 tpch --use-explain={{workflow.parameters.use-explain}} --sf=50 --queries {{workflow.parameters.queries}} run --time 30m
     - name: workload-deletion
       inputs:
