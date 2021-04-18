@@ -13,7 +13,7 @@ spec:
       - name: use-explain                       # show explain analyze info?
         value: false
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
-        value: nightly
+        value: v5.0.1-pre
       - name: tidb-url
         value: "" # http://fileserver.pingcap.net/download/builds/pingcap/tidb/abbf3fe8e638b19443dffa59976555a73c46bbae/centos7/tidb-server.tar.gz
       - name: tikv-url
@@ -24,7 +24,7 @@ spec:
         value: nightly                          # option: nightly | v5.0-rc-nightly | release-4.0-nightly
       ######################################### baseline part
       - name: baseline-release
-        value: nightly
+        value: v5.0.0
       - name: baseline-tidb-url                 # if need to patch baseline tidb binary version
         value: ""
       - name: baseline-tikv-url
@@ -194,7 +194,7 @@ spec:
           spec:
             resourceRequest: tidb-cluster
             tidbCluster:
-              tiupMirror: http://172.16.4.61:31988
+              tiupMirror: http://172.16.4.71:31888
               serverConfigs:
                 tidb: |-
                   mem-quota-query: 34359738368
@@ -284,7 +284,7 @@ spec:
                         /br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10-release4.0 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch:0:4} == "v5.0" ]]; then
-                        /br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10 \
+                        /br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10-v5.0.0 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch} == "nightly" ]]; then
                         /br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10 \
@@ -333,8 +333,8 @@ spec:
                           set global tidb_index_lookup_concurrency = 16;
                           set global tidb_index_lookup_join_concurrency = 16;
                       '
-                      mysql -h $tidb -P4000 -D tpch50 -e 'analyze table lineitem; analyze table orders; analyze table part; analyze table partsupp; analyze table supplier; analyze table customer; analyze table region; analyze table nation;'
-                      go-tpc -H $tidb -P4000 -D tpch10 tpch --use-explain={{workflow.parameters.use-explain}} --sf=10 --queries {{workflow.parameters.queries}} run --time 30m
+                      mysql -h $tidb -P4000 -D tpch10 -e 'analyze table lineitem; analyze table orders; analyze table part; analyze table partsupp; analyze table supplier; analyze table customer; analyze table region; analyze table nation;'
+                      go-tpc -H $tidb -P4000 -D tpch10 tpch --use-explain={{workflow.parameters.use-explain}} --sf=10 --queries {{workflow.parameters.queries}} run --time 1h
     - name: workload-deletion
       inputs:
         parameters:

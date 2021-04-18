@@ -194,7 +194,7 @@ spec:
           spec:
             resourceRequest: tidb-cluster
             tidbCluster:
-              tiupMirror: http://172.16.4.61:31988
+              tiupMirror: http://172.16.4.71:31888
               serverConfigs:
                 tidb: |-
                   mem-quota-query: 34359738368

@@ -8,10 +8,10 @@ spec:
   arguments:
     parameters:
       - name: oltp_method
-        value: oltp_write_only                # oltp_point_select, oltp_insert, oltp_update_index, oltp_update_non_index, oltp_read_only, oltp_read_write, oltp_write_only
+        value: oltp_read_write                # oltp_point_select, oltp_insert, oltp_update_index, oltp_update_non_index, oltp_read_only, oltp_read_write, oltp_write_only
       ######################################### current part
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
-        value: v4.0.10
+        value: v5.0.1-pre
       - name: tidb-url
         value: ""
       - name: tikv-url
@@ -19,10 +19,10 @@ spec:
       - name: pd-url
         value: ""
       - name: toolset-tag                       # we use br to restore data, so you need fill in the toolset version
-        value: release-4.0-nightly              # option: nightly | v5.0-rc-nightly | release-4.0-nightly
+        value: nightly              # option: nightly | v5.0-rc-nightly | release-4.0-nightly
       ######################################### baseline part
       - name: baseline-release
-        value: nightly
+        value: v5.0.0
       - name: baseline-tidb-url                 # if need to patch baseline tidb binary version
         value: ""
       - name: baseline-tikv-url
@@ -192,19 +192,20 @@ spec:
           spec:
             resourceRequest: tidb-cluster
             tidbCluster:
-              tiupMirror: http://172.16.4.61:31988
+              tiupMirror: http://172.16.4.71:31888
               serverConfigs:
                 tidb: |-
                 tikv: |-
-                  #rocksdb.defaultcf.block-cache-size: "16GB"
-                  #rocksdb.writecf.block-cache-size: "9GB"
-                  #rocksdb.lockcf.block-cache-size: "1GB"
+                  rocksdb.defaultcf.block-cache-size: "16GB"
+                  rocksdb.writecf.block-cache-size: "9GB"
+                  rocksdb.lockcf.block-cache-size: "1GB"
                 pd: |-
               version:
                 version: {{inputs.parameters.release-branch}}
                 tidbDownloadURL: {{inputs.parameters.tidb-url}}
                 tikvDownloadURL: {{inputs.parameters.tikv-url}}
                 pdDownloadURL: {{inputs.parameters.pd-url}}
+                patchPolicy: Replace
               control: tidb
               tikv:
                 - host: tikv-1

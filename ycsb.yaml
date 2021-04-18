@@ -8,9 +8,9 @@ spec:
   arguments:
     parameters:
       - name: workload
-        value: "workloade"                      # workloada workloadb workloadc workloadd workloade
+        value: "workloada"                      # workloada workloadb workloadc workloadd workloade
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
-        value: nightly
+        value: v5.0.1-pre
       - name: tidb-url
         value: ""
       - name: tikv-url
@@ -21,7 +21,7 @@ spec:
         value: nightly                          # option: nightly | v5.0-rc-nightly | release-4.0-nightly
       ######################################### baseline part
       - name: baseline-release
-        value: nightly
+        value: v5.0.0
       - name: baseline-tidb-url                 # if need to patch baseline tidb binary version
         value: ""
       - name: baseline-tikv-url
@@ -191,19 +191,20 @@ spec:
           spec:
             resourceRequest: tidb-cluster
             tidbCluster:
-              tiupMirror: http://172.16.4.61:31988
+              tiupMirror: http://172.16.4.71:31888
               serverConfigs:
                 tidb: |-
                 tikv: |-
-                  #rocksdb.defaultcf.block-cache-size: "16GB"
-                  #rocksdb.writecf.block-cache-size: "9GB"
-                  #rocksdb.lockcf.block-cache-size: "1GB"
+                  rocksdb.defaultcf.block-cache-size: "16GB"
+                  rocksdb.writecf.block-cache-size: "9GB"
+                  rocksdb.lockcf.block-cache-size: "1GB"
                 pd: |-
               version:
                 version: {{inputs.parameters.release-branch}}
                 tidbDownloadURL: {{inputs.parameters.tidb-url}}
                 tikvDownloadURL: {{inputs.parameters.tikv-url}}
                 pdDownloadURL: {{inputs.parameters.pd-url}}
+                patchPolicy: Replace
               control: tidb
               tikv:
                 - host: tikv-1
