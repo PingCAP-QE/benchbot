@@ -266,7 +266,7 @@ spec:
                   resourceRequest:
                     name: tidb-cluster
                     node: workload
-                  image: "docker.io/pingcap/br:{{inputs.parameters.toolset-tag}}"
+                  image: "hub.pingcap.net/mahjonp/bench-toolset"
                   imagePullPolicy: Always
                   command:
                     - /bin/bash
@@ -274,21 +274,17 @@ spec:
                     - |
                       #!/bin/bash
                       set -ex
-                      export AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin
                       tidb=`echo $cluster_tidb0 | awk -F ":" '{print $1}'`
                       pd=`echo $cluster_pd0 | awk -F ":" '{print $1}'`
                       release_branch="{{inputs.parameters.release-branch}}"
                       if [[ ${release_branch:0:4} == "v3.0" ]]; then
                         go-tpc -H $tidb -P4000 -D tpch10 tpch --sf=10 prepare
                       elif [[ ${release_branch:0:4} == "v4.0" ]]; then
-                        /br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10-release4.0 \
-                          --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
+                        mysql -h $tidb -P4000 -e "RESTORE DATABASE * FROM 's3://benchmark/tpch10-release4.0?&access-key=minioadmin&secret-access-key=minioadmin&endpoint=http%3a%2f%2fminio.pingcap.net%3a9000&force-path-style=true'"
                       elif [[ ${release_branch:0:4} == "v5.0" ]]; then
-                        /br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10-v5.0.0 \
-                          --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
+                        mysql -h $tidb -P4000 -e "RESTORE DATABASE * FROM 's3://benchmark/tpch10-v5.0.0?&access-key=minioadmin&secret-access-key=minioadmin&endpoint=http%3a%2f%2fminio.pingcap.net%3a9000&force-path-style=true'"
                       elif [[ ${release_branch} == "nightly" ]]; then
-                        /br restore db --db=tpch10 --pd $pd:2379 --storage s3://benchmark/tpch10 \
-                          --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
+                        mysql -h $tidb -P4000 -e "RESTORE DATABASE * FROM 's3://benchmark/tpch10?&access-key=minioadmin&secret-access-key=minioadmin&endpoint=http%3a%2f%2fminio.pingcap.net%3a9000&force-path-style=true'"
                       else
                         echo "illegal release_branch: $release_branch"
                         exit 1
