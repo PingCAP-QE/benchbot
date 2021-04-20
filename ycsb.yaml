@@ -8,7 +8,7 @@ spec:
   arguments:
     parameters:
       - name: workload
-        value: "workloada"                      # workloada workloadb workloadc workloadd workloade
+        value: "workloadf"                      # workloada workloadb workloadc workloadd workloade
       - name: release                           # release version: nightly, v3.0.x, v4.0.x
         value: v5.0.1-pre
       - name: tidb-url
@@ -278,7 +278,7 @@ spec:
                         /br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m-release4.0 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch:0:4} == "v5.0" ]]; then
-                        /br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m \
+                        /br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m-v5.0.0 \
                           --s3.endpoint http://minio.pingcap.net:9000 --send-credentials-to-tikv=true
                       elif [[ ${release_branch} == "nightly" ]]; then
                         /br restore db --db=test --pd $pd:2379 --storage s3://benchmark/ycsb-100m \
